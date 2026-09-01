@@ -1,0 +1,548 @@
+{
+  "_meta": {
+    "purpose": "Statutory duty corpus for ANUPALAN. Each entry becomes a row in `statute` (embedded with MiniLM) and seeds an `obligation` per applicable mine.",
+    "honesty_note": "Clause TEXT below is a faithful paraphrase drawn from the team's domain research brief, not verbatim gazette text. Regulation numbers are taken only from sources cited in that brief — none are invented. Before any production claim, replace `text` with the official gazette wording. A 4B model asked to recall statute from memory invents regulation numbers; this file exists so it never has to.",
+    "source": "NeuraForge_SIH26024_Domain_Research.docx §1.2-1.5, §2.3",
+    "count": 50,
+    "owner_roles": ["Mine Manager", "Safety Officer", "Ventilation Officer", "Environment Officer", "Medical Officer", "Welfare Officer", "Workmen's Inspector", "Rescue Superintendent", "Owner/Agent", "Surveyor"],
+    "frequencies": ["continuous", "daily", "weekly", "4x_weekly", "fortnightly", "monthly", "quarterly", "half_yearly", "annual", "event_driven", "one_time"],
+    "evidence_types": ["photo", "reading", "document", "register", "meeting_minutes", "diary_entry", "sample_result", "return_filing", "certificate", "survey"]
+  },
+
+  "clauses": [
+    {
+      "act": "Mines Act 1952",
+      "clause_ref": "Mines Act 1952 · S.16",
+      "title": "Notice of opening a mine",
+      "text": "Written notice must be given to the Chief Inspector, the Controller of Indian Bureau of Mines and the District Magistrate at least one month before a mine is opened.",
+      "owner_role": "Owner/Agent",
+      "frequency": "one_time",
+      "evidence_type": "document",
+      "applies_to": ["underground", "opencast", "mixed"]
+    },
+    {
+      "act": "Mines Act 1952",
+      "clause_ref": "Mines Act 1952 · S.17",
+      "title": "Sole manager with prescribed qualifications",
+      "text": "Every mine must have a sole manager holding the prescribed statutory qualifications.",
+      "owner_role": "Owner/Agent",
+      "frequency": "continuous",
+      "evidence_type": "certificate",
+      "applies_to": ["underground", "opencast", "mixed"]
+    },
+    {
+      "act": "Mines Act 1952",
+      "clause_ref": "Mines Act 1952 · S.18",
+      "title": "Due diligence record — owner, agent and manager",
+      "text": "Owner, agent and manager are jointly liable for contraventions unless they can show due diligence was exercised to secure compliance. Every obligation therefore carries a named individual owner.",
+      "owner_role": "Mine Manager",
+      "frequency": "continuous",
+      "evidence_type": "document",
+      "applies_to": ["underground", "opencast", "mixed"]
+    },
+    {
+      "act": "Mines Act 1952",
+      "clause_ref": "Mines Act 1952 · S.22",
+      "title": "Compliance with improvement and stop-work notices",
+      "text": "Where an inspector issues an improvement notice or exercises stop-work powers, the mine must comply and record the action taken.",
+      "owner_role": "Mine Manager",
+      "frequency": "event_driven",
+      "evidence_type": "document",
+      "applies_to": ["underground", "opencast", "mixed"]
+    },
+    {
+      "act": "Mines Act 1952",
+      "clause_ref": "Mines Act 1952 · S.23",
+      "title": "Accident notice and 14-day posting at the mine",
+      "text": "Accidents involving loss of life, serious bodily injury, explosion or inundation must be notified, and a copy of the notice posted at the mine for fourteen days.",
+      "owner_role": "Safety Officer",
+      "frequency": "event_driven",
+      "evidence_type": "document",
+      "applies_to": ["underground", "opencast", "mixed"]
+    },
+    {
+      "act": "Mines Act 1952",
+      "clause_ref": "Mines Act 1952 · S.48",
+      "title": "Statutory registers maintained",
+      "text": "Registers must record employee identity, nature of employment, shift schedules and the persons currently underground.",
+      "owner_role": "Mine Manager",
+      "frequency": "daily",
+      "evidence_type": "register",
+      "applies_to": ["underground", "opencast", "mixed"]
+    },
+    {
+      "act": "Mines Act 1952",
+      "clause_ref": "Mines Act 1952 · S.7",
+      "title": "Facilitate inspector entry at any hour",
+      "text": "Inspectors may enter and examine any mine at any time, day or night. Access, records and assistance must be available on demand.",
+      "owner_role": "Mine Manager",
+      "frequency": "continuous",
+      "evidence_type": "document",
+      "applies_to": ["underground", "opencast", "mixed"]
+    },
+
+    {
+      "act": "Coal Mines Regulations 2017",
+      "clause_ref": "CMR 2017 · Reg. 4",
+      "title": "Annual return to Chief Inspector",
+      "text": "Annual returns must be submitted to the Chief Inspector, the Regional Inspector and the District Magistrate by 1 February each year.",
+      "owner_role": "Mine Manager",
+      "frequency": "annual",
+      "evidence_type": "return_filing",
+      "due_rule": "01-02",
+      "applies_to": ["underground", "opencast", "mixed"]
+    },
+    {
+      "act": "Coal Mines Regulations 2017",
+      "clause_ref": "CMR 2017 · Reg. 8",
+      "title": "Accident notice to DGMS within 24 hours",
+      "text": "Notice of an accident causing death or serious bodily injury must reach the authorities within twenty-four hours.",
+      "owner_role": "Safety Officer",
+      "frequency": "event_driven",
+      "evidence_type": "return_filing",
+      "sla_hours": 24,
+      "applies_to": ["underground", "opencast", "mixed"]
+    },
+    {
+      "act": "Coal Mines Regulations 2017",
+      "clause_ref": "CMR 2017 · Reg. 9",
+      "title": "Notifiable occupational disease reported within 3 days",
+      "text": "Notifiable occupational diseases must be reported within three days of detection.",
+      "owner_role": "Medical Officer",
+      "frequency": "event_driven",
+      "evidence_type": "return_filing",
+      "sla_hours": 72,
+      "applies_to": ["underground", "opencast", "mixed"]
+    },
+    {
+      "act": "Coal Mines Regulations 2017",
+      "clause_ref": "CMR 2017 · Reg. 29",
+      "title": "Safety Officer appointed where thresholds are met",
+      "text": "A Safety Officer is mandatory for underground mines producing above 5,000 tonnes per month, or opencast mines above 20,000 cubic metres per month.",
+      "owner_role": "Owner/Agent",
+      "frequency": "continuous",
+      "evidence_type": "certificate",
+      "applies_to": ["underground", "opencast", "mixed"]
+    },
+    {
+      "act": "Coal Mines Regulations 2017",
+      "clause_ref": "CMR 2017 · Reg. 43",
+      "title": "Manager's underground inspection, four times weekly",
+      "text": "The manager must personally inspect the underground workings at least four times a week, each visit logged in a bound diary.",
+      "owner_role": "Mine Manager",
+      "frequency": "4x_weekly",
+      "evidence_type": "diary_entry",
+      "applies_to": ["underground", "mixed"]
+    },
+    {
+      "act": "Coal Mines Regulations 2017",
+      "clause_ref": "CMR 2017 · Reg. 43",
+      "title": "Night-shift inspection once a fortnight",
+      "text": "At least one of the manager's statutory underground inspections in each fortnight must fall on the night shift.",
+      "owner_role": "Mine Manager",
+      "frequency": "fortnightly",
+      "evidence_type": "diary_entry",
+      "applies_to": ["underground", "mixed"]
+    },
+    {
+      "act": "Coal Mines Regulations 2017",
+      "clause_ref": "CMR 2017 · Reg. 43",
+      "title": "Serious accident inquiry submitted within 15 days",
+      "text": "Serious accidents must be investigated and the findings submitted to the inspectors within fifteen days.",
+      "owner_role": "Mine Manager",
+      "frequency": "event_driven",
+      "evidence_type": "document",
+      "sla_hours": 360,
+      "applies_to": ["underground", "opencast", "mixed"]
+    },
+    {
+      "act": "Coal Mines Regulations 2017",
+      "clause_ref": "CMR 2017 · Reg. 44",
+      "title": "Safety Officer not assigned other work",
+      "text": "The Safety Officer's duties are prescribed, with an explicit bar on assigning that officer work other than safety.",
+      "owner_role": "Mine Manager",
+      "frequency": "continuous",
+      "evidence_type": "document",
+      "applies_to": ["underground", "opencast", "mixed"]
+    },
+    {
+      "act": "Coal Mines Regulations 2017",
+      "clause_ref": "CMR 2017 · Reg. 46",
+      "title": "Daily main mechanical ventilator check",
+      "text": "The Ventilation Officer must check the main mechanical ventilator daily and record the result.",
+      "owner_role": "Ventilation Officer",
+      "frequency": "daily",
+      "evidence_type": "reading",
+      "applies_to": ["underground", "mixed"]
+    },
+    {
+      "act": "Coal Mines Regulations 2017",
+      "clause_ref": "CMR 2017 · Reg. 46",
+      "title": "Quarterly fan efficiency determination",
+      "text": "Fan efficiency must be determined quarterly and the measurement recorded.",
+      "owner_role": "Ventilation Officer",
+      "frequency": "quarterly",
+      "evidence_type": "reading",
+      "applies_to": ["underground", "mixed"]
+    },
+    {
+      "act": "Coal Mines Regulations 2017",
+      "clause_ref": "CMR 2017 · Reg. 46",
+      "title": "Air sample analysed within 48 hours",
+      "text": "Air samples drawn from the workings must be analysed within forty-eight hours of collection.",
+      "owner_role": "Ventilation Officer",
+      "frequency": "event_driven",
+      "evidence_type": "sample_result",
+      "sla_hours": 48,
+      "applies_to": ["underground", "mixed"]
+    },
+    {
+      "act": "Coal Mines Regulations 2017",
+      "clause_ref": "CMR 2017 · Reg. 106",
+      "title": "Overburden dump slope stability check",
+      "text": "Overburden dumps must be maintained within safe slope limits, with stability monitored and recorded.",
+      "owner_role": "Mine Manager",
+      "frequency": "weekly",
+      "evidence_type": "reading",
+      "applies_to": ["opencast", "mixed"]
+    },
+    {
+      "act": "Coal Mines Regulations 2017",
+      "clause_ref": "CMR 2017 · Reg. 108",
+      "title": "Support and strata observation",
+      "text": "Support and strata conditions in the workings must be observed and recorded, with convergence readings taken where strata movement is monitored.",
+      "owner_role": "Mine Manager",
+      "frequency": "daily",
+      "evidence_type": "photo",
+      "applies_to": ["underground", "mixed"]
+    },
+
+    {
+      "act": "Mines Rules 1955",
+      "clause_ref": "Mines Rules 1955 · R. 29-P",
+      "title": "Annual medical examination return by 20 February",
+      "text": "The annual return of medical examinations must be filed by 20 February each year.",
+      "owner_role": "Medical Officer",
+      "frequency": "annual",
+      "evidence_type": "return_filing",
+      "due_rule": "20-02",
+      "applies_to": ["underground", "opencast", "mixed"]
+    },
+    {
+      "act": "Mines Rules 1955",
+      "clause_ref": "Mines Rules 1955 · R. 29-B",
+      "title": "Initial medical examination on employment",
+      "text": "Persons must undergo an initial medical examination before being employed in the mine.",
+      "owner_role": "Medical Officer",
+      "frequency": "event_driven",
+      "evidence_type": "document",
+      "applies_to": ["underground", "opencast", "mixed"]
+    },
+    {
+      "act": "Mines Rules 1955",
+      "clause_ref": "Mines Rules 1955 · R. 29-C",
+      "title": "Periodic medical examination",
+      "text": "Employed persons must undergo periodic medical examination at the prescribed interval.",
+      "owner_role": "Medical Officer",
+      "frequency": "annual",
+      "evidence_type": "document",
+      "applies_to": ["underground", "opencast", "mixed"]
+    },
+    {
+      "act": "Mines Rules 1955",
+      "clause_ref": "Mines Rules 1955 · R. 29-K",
+      "title": "Medical records retained for ten years",
+      "text": "Records of initial and periodic medical examinations must be retained for ten years.",
+      "owner_role": "Medical Officer",
+      "frequency": "continuous",
+      "evidence_type": "register",
+      "applies_to": ["underground", "opencast", "mixed"]
+    },
+    {
+      "act": "Mines Rules 1955",
+      "clause_ref": "Mines Rules 1955 · R. 29-Q",
+      "title": "Workmen's Inspectors appointed at 500+ employees",
+      "text": "Workmen's Inspectors must be appointed where the mine employs five hundred or more persons.",
+      "owner_role": "Owner/Agent",
+      "frequency": "continuous",
+      "evidence_type": "document",
+      "applies_to": ["underground", "opencast", "mixed"]
+    },
+    {
+      "act": "Mines Rules 1955",
+      "clause_ref": "Mines Rules 1955 · R. 29-Q",
+      "title": "Workmen's Inspector site round",
+      "text": "The Workmen's Inspector must carry out inspection rounds of the workings and record observations.",
+      "owner_role": "Workmen's Inspector",
+      "frequency": "weekly",
+      "evidence_type": "diary_entry",
+      "applies_to": ["underground", "opencast", "mixed"]
+    },
+    {
+      "act": "Mines Rules 1955",
+      "clause_ref": "Mines Rules 1955 · R. 29-T",
+      "title": "Safety Committee constituted at 100+ workers",
+      "text": "A Safety Committee is mandatory where the mine employs one hundred or more persons.",
+      "owner_role": "Safety Officer",
+      "frequency": "continuous",
+      "evidence_type": "document",
+      "applies_to": ["underground", "opencast", "mixed"]
+    },
+    {
+      "act": "Mines Rules 1955",
+      "clause_ref": "Mines Rules 1955 · R. 29-T",
+      "title": "Safety Committee meeting and minutes",
+      "text": "The Safety Committee must meet at the prescribed interval and record minutes. Contract workers' representation is a recurring gap noted by the Standing Committee on Safety in Coal Mines.",
+      "owner_role": "Safety Officer",
+      "frequency": "monthly",
+      "evidence_type": "meeting_minutes",
+      "applies_to": ["underground", "opencast", "mixed"]
+    },
+    {
+      "act": "Mines Rules 1955",
+      "clause_ref": "Mines Rules 1955 · R. 29-W",
+      "title": "Safety Committee recommendations implemented within 15 days",
+      "text": "Recommendations of the Safety Committee must be implemented within fifteen days.",
+      "owner_role": "Mine Manager",
+      "frequency": "event_driven",
+      "evidence_type": "document",
+      "sla_hours": 360,
+      "applies_to": ["underground", "opencast", "mixed"]
+    },
+    {
+      "act": "Mines Rules 1955",
+      "clause_ref": "Mines Rules 1955 · R. 72",
+      "title": "Welfare Officer appointed at 500+ workers",
+      "text": "A Welfare Officer is mandatory where the mine employs five hundred or more persons.",
+      "owner_role": "Owner/Agent",
+      "frequency": "continuous",
+      "evidence_type": "document",
+      "applies_to": ["underground", "opencast", "mixed"]
+    },
+    {
+      "act": "Mines Rules 1955",
+      "clause_ref": "Mines Rules 1955 · R. 77-A",
+      "title": "Identity tokens issued and reconciled",
+      "text": "Identity tokens must be issued to persons entering the mine and reconciled on exit.",
+      "owner_role": "Mine Manager",
+      "frequency": "daily",
+      "evidence_type": "register",
+      "applies_to": ["underground", "mixed"]
+    },
+    {
+      "act": "Mines Rules 1955",
+      "clause_ref": "Mines Rules 1955 · Form A",
+      "title": "Employee register maintained",
+      "text": "Form A: register of persons employed at the mine.",
+      "owner_role": "Mine Manager",
+      "frequency": "continuous",
+      "evidence_type": "register",
+      "applies_to": ["underground", "opencast", "mixed"]
+    },
+    {
+      "act": "Mines Rules 1955",
+      "clause_ref": "Mines Rules 1955 · Form D",
+      "title": "Daily attendance register",
+      "text": "Form D: daily record of attendance.",
+      "owner_role": "Mine Manager",
+      "frequency": "daily",
+      "evidence_type": "register",
+      "applies_to": ["underground", "opencast", "mixed"]
+    },
+    {
+      "act": "Mines Rules 1955",
+      "clause_ref": "Mines Rules 1955 · Form J",
+      "title": "Reportable accidents return",
+      "text": "Form J: return of reportable accidents.",
+      "owner_role": "Safety Officer",
+      "frequency": "event_driven",
+      "evidence_type": "return_filing",
+      "applies_to": ["underground", "opencast", "mixed"]
+    },
+    {
+      "act": "Mines Rules 1955",
+      "clause_ref": "Mines Rules 1955 · Form K",
+      "title": "Minor accidents register",
+      "text": "Form K: record of minor accidents.",
+      "owner_role": "Safety Officer",
+      "frequency": "event_driven",
+      "evidence_type": "register",
+      "applies_to": ["underground", "opencast", "mixed"]
+    },
+    {
+      "act": "Mines Rules 1955",
+      "clause_ref": "Mines Rules 1955 · Form B",
+      "title": "Overtime register",
+      "text": "Form B: register of overtime worked.",
+      "owner_role": "Mine Manager",
+      "frequency": "monthly",
+      "evidence_type": "register",
+      "applies_to": ["underground", "opencast", "mixed"]
+    },
+    {
+      "act": "Mines Rules 1955",
+      "clause_ref": "Mines Rules 1955 · Form E",
+      "title": "Leave with wages register",
+      "text": "Form E: register of leave with wages.",
+      "owner_role": "Welfare Officer",
+      "frequency": "monthly",
+      "evidence_type": "register",
+      "applies_to": ["underground", "opencast", "mixed"]
+    },
+
+    {
+      "act": "Mines Rescue Rules 1985",
+      "clause_ref": "Mines Rescue Rules 1985 · Rescue station",
+      "title": "Rescue station or rescue room within reach",
+      "text": "Underground mines with more than one hundred persons below ground require a rescue station, or a rescue room where no station lies within thirty-five kilometres.",
+      "owner_role": "Rescue Superintendent",
+      "frequency": "continuous",
+      "evidence_type": "document",
+      "applies_to": ["underground", "mixed"]
+    },
+    {
+      "act": "Mines Rescue Rules 1985",
+      "clause_ref": "Mines Rescue Rules 1985 · Brigade strength",
+      "title": "Trained rescue brigade of eighteen maintained",
+      "text": "A trained rescue brigade of eighteen persons must be maintained.",
+      "owner_role": "Rescue Superintendent",
+      "frequency": "continuous",
+      "evidence_type": "register",
+      "applies_to": ["underground", "mixed"]
+    },
+    {
+      "act": "Mines Rescue Rules 1985",
+      "clause_ref": "Mines Rescue Rules 1985 · Medical re-examination",
+      "title": "Annual medical re-examination of rescue personnel",
+      "text": "Rescue personnel must undergo annual medical re-examination.",
+      "owner_role": "Medical Officer",
+      "frequency": "annual",
+      "evidence_type": "document",
+      "applies_to": ["underground", "mixed"]
+    },
+    {
+      "act": "Mines Rescue Rules 1985",
+      "clause_ref": "Mines Rescue Rules 1985 · Refresher training",
+      "title": "Rescue brigade refresher training current",
+      "text": "Rescue brigade members must keep refresher training current.",
+      "owner_role": "Rescue Superintendent",
+      "frequency": "quarterly",
+      "evidence_type": "certificate",
+      "applies_to": ["underground", "mixed"]
+    },
+
+    {
+      "act": "EIA Notification 2006",
+      "clause_ref": "EIA Notification 2006 · Half-yearly compliance",
+      "title": "Half-yearly EC compliance report — 1 June",
+      "text": "Project proponents must file an environmental clearance compliance report by 1 June. The filing is a self-declaration; the portal digitises the paperwork without verifying field conditions.",
+      "owner_role": "Environment Officer",
+      "frequency": "half_yearly",
+      "evidence_type": "return_filing",
+      "due_rule": "01-06",
+      "applies_to": ["underground", "opencast", "mixed"]
+    },
+    {
+      "act": "EIA Notification 2006",
+      "clause_ref": "EIA Notification 2006 · Half-yearly compliance",
+      "title": "Half-yearly EC compliance report — 1 December",
+      "text": "Project proponents must file an environmental clearance compliance report by 1 December.",
+      "owner_role": "Environment Officer",
+      "frequency": "half_yearly",
+      "evidence_type": "return_filing",
+      "due_rule": "01-12",
+      "applies_to": ["underground", "opencast", "mixed"]
+    },
+    {
+      "act": "Environment (Protection) Act 1986",
+      "clause_ref": "CPCB · Consent to Operate",
+      "title": "Valid Consent to Operate held",
+      "text": "Mining is a Red-category activity requiring a valid Consent to Operate from the State Pollution Control Board. CAG Report No. 12 of 2019 found sixteen CIL units operating without valid statutory clearance as at March 2018.",
+      "owner_role": "Environment Officer",
+      "frequency": "continuous",
+      "evidence_type": "certificate",
+      "applies_to": ["underground", "opencast", "mixed"]
+    },
+    {
+      "act": "Environment (Protection) Act 1986",
+      "clause_ref": "CPCB · Consent to Establish",
+      "title": "Valid Consent to Establish held",
+      "text": "A Consent to Establish must be obtained from the State Pollution Control Board before establishing the operation.",
+      "owner_role": "Environment Officer",
+      "frequency": "one_time",
+      "evidence_type": "certificate",
+      "applies_to": ["underground", "opencast", "mixed"]
+    },
+    {
+      "act": "Environment (Protection) Act 1986",
+      "clause_ref": "CPCB · CAAQMS uptime",
+      "title": "Continuous ambient air quality monitoring operational",
+      "text": "Continuous ambient air quality monitoring stations must remain operational. CAG found only 58 of 96 required stations installed across twelve mines, with twelve mines having none despite a mandate in force since November 2009.",
+      "owner_role": "Environment Officer",
+      "frequency": "continuous",
+      "evidence_type": "reading",
+      "applies_to": ["underground", "opencast", "mixed"]
+    },
+    {
+      "act": "Environment (Protection) Act 1986",
+      "clause_ref": "CPCB · Effluent discharge",
+      "title": "Discharged water within BIS limits",
+      "text": "Water discharged to water bodies must remain within BIS quality limits. CAG found eight mines exceeding limits, and two MCL mines discharging 62 lakh kilolitres of untreated water between 2013 and 2018.",
+      "owner_role": "Environment Officer",
+      "frequency": "monthly",
+      "evidence_type": "sample_result",
+      "applies_to": ["underground", "opencast", "mixed"]
+    },
+    {
+      "act": "Environment (Protection) Act 1986",
+      "clause_ref": "EC condition · Topsoil management",
+      "title": "Stacked topsoil quantity and area recorded",
+      "text": "Quantity and area of stacked topsoil must be recorded. CAG found thirteen of twenty-three mines kept no such record.",
+      "owner_role": "Environment Officer",
+      "frequency": "quarterly",
+      "evidence_type": "survey",
+      "applies_to": ["opencast", "mixed"]
+    },
+    {
+      "act": "Environment (Protection) Act 1986",
+      "clause_ref": "EC condition · Biological reclamation",
+      "title": "Biological reclamation target met",
+      "text": "Biological reclamation must meet the target set in the environmental clearance. CAG recorded MCL achieving 51.6 per cent of its target.",
+      "owner_role": "Environment Officer",
+      "frequency": "annual",
+      "evidence_type": "survey",
+      "applies_to": ["opencast", "mixed"]
+    },
+
+    {
+      "act": "MMDR Act 1957",
+      "clause_ref": "MMDR 1957 · Approved mining plan",
+      "title": "Operations within the approved mining plan",
+      "text": "Mine owners must hold an approved mining plan and operate in accordance with it.",
+      "owner_role": "Mine Manager",
+      "frequency": "continuous",
+      "evidence_type": "document",
+      "applies_to": ["underground", "opencast", "mixed"]
+    },
+    {
+      "act": "MMDR Act 1957",
+      "clause_ref": "MCDR 2017 · Conservation and development",
+      "title": "Mineral Conservation and Development Rules complied with",
+      "text": "Operations must comply with the Mineral Conservation and Development Rules 2017.",
+      "owner_role": "Mine Manager",
+      "frequency": "continuous",
+      "evidence_type": "document",
+      "applies_to": ["underground", "opencast", "mixed"]
+    },
+    {
+      "act": "MMDR Act 1957",
+      "clause_ref": "MMDR 1957 · Lease boundary",
+      "title": "Excavation contained within the sanctioned lease",
+      "text": "Excavation must remain within the sanctioned lease boundary. The 2015 amendment raised illegal-mining penalties to five lakh rupees per hectare and imprisonment to five years. Boundary containment is verified geometrically, never by a model.",
+      "owner_role": "Surveyor",
+      "frequency": "continuous",
+      "evidence_type": "survey",
+      "applies_to": ["opencast", "mixed"]
+    }
+  ]
+}
