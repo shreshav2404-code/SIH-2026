@@ -1,0 +1,23 @@
+services:
+  db:
+    build:
+      context: ./infra
+      dockerfile: Dockerfile.db
+    container_name: anupalan-db
+    environment:
+      POSTGRES_USER: anupalan
+      POSTGRES_PASSWORD: anupalan
+      POSTGRES_DB: anupalan
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./infra/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U anupalan -d anupalan"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdata:

@@ -1,0 +1,40 @@
+# ANUPALAN backend — Python 3.11
+# NO LLM here. All language work runs on-device in the app.
+
+# --- api ---
+fastapi
+uvicorn[standard]
+python-multipart
+pydantic
+pydantic-settings
+python-dotenv
+
+# --- database ---
+sqlalchemy
+alembic
+psycopg2-binary
+pgvector
+geoalchemy2
+shapely
+
+# --- auth ---
+python-jose[cryptography]
+passlib[bcrypt]
+
+# --- ml (deterministic: scoring + detection) ---
+scikit-learn
+xgboost
+pandas
+numpy
+joblib
+
+# --- embeddings: MiniLM retrieval over the clause corpus ---
+sentence-transformers
+
+# --- vision: YOLOv8n on evidence photos ---
+ultralytics
+pillow
+
+# --- misc ---
+httpx
+apscheduler
