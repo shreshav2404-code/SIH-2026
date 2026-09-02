@@ -1,6 +1,8 @@
+import axios from "axios";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
+import { API_BASE } from "../api/client";
 import { useAuth } from "../lib/auth";
 
 const DEMO = [
@@ -24,8 +26,25 @@ export default function Login() {
     try {
       await login(username, password);
       nav("/");
-    } catch {
-      setError("Incorrect username or password.");
+    } catch (err) {
+      // Only a 401 is actually a credentials problem. Reporting a dead API or
+      // a stopped database as "wrong password" sends you hunting for the wrong
+      // bug — say what really failed.
+      const status = axios.isAxiosError(err) ? err.response?.status : undefined;
+
+      if (status === 401) {
+        setError("Incorrect username or password.");
+      } else if (status === undefined) {
+        setError(
+          `Cannot reach the API at ${API_BASE}. Is uvicorn running on port 8000?`,
+        );
+      } else if (status >= 500) {
+        setError(
+          `The API returned ${status}. Its database is usually the cause — check that the anupalan-db container is running.`,
+        );
+      } else {
+        setError(`Sign-in failed (HTTP ${status}).`);
+      }
     } finally {
       setBusy(false);
     }

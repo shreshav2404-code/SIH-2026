@@ -96,11 +96,19 @@ def ingest(body: ReadingsIn, db: Session = Depends(get_db)) -> dict:
         if recent:
             continue
 
+        # A breach and an approach are not the same event. Only a reading that
+        # has actually crossed the statutory limit carries the clause's own
+        # severity; a rise toward it is a warning, so "critical" keeps meaning
+        # "this has broken the law".
+        severity = cfg.get("severity", "warning")
+        if stats.get("reason") == "rising":
+            severity = "warning"
+
         alert = Alert(
             mine_id=mine_id,
             obligation_id=_obligation_for_clause(db, mine_id, clause_ref),
             clause_ref=clause_ref,
-            severity=cfg.get("severity", "warning"),
+            severity=severity,
             message=alert_message(sensor_type, stats, rows[-1].unit),
             source="rule",
         )

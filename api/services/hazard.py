@@ -18,8 +18,15 @@ THRESHOLDS: dict[str, dict] = json.loads(SEED.read_text(encoding="utf-8"))[
     "sensor_thresholds"
 ]
 
-Z_TRIGGER = 2.5      # standard deviations above the window mean
-MIN_SAMPLES = 5      # below this a z-score is meaningless
+Z_TRIGGER = 3.0      # standard deviations above the window mean
+MIN_SAMPLES = 12     # below this a z-score is meaningless
+
+# The rising-trend trigger only applies once a reading is already approaching
+# the statutory limit. Without this floor, ordinary sensor noise well below the
+# trigger produces "CRITICAL — methane rising sharply, 0.98%" against a 1.25%
+# limit: a compliance alert on a compliant reading. That is worse than no
+# alert, because it teaches the officer to ignore the ones that matter.
+APPROACH_FRACTION = 0.75
 
 
 def threshold_for(sensor_type: str) -> dict | None:
@@ -30,10 +37,12 @@ def threshold_for(sensor_type: str) -> dict | None:
 def evaluate(sensor_type: str, values: list[float]) -> dict:
     """Return the window statistics and whether it breaches.
 
-    Two independent triggers, either is enough:
+    Two triggers, either is enough:
       1. absolute — latest value crosses the statutory threshold
-      2. relative — latest value is Z_TRIGGER sigma above the window mean,
-         which catches a fast rise that has not yet crossed the line
+      2. relative — latest value is Z_TRIGGER sigma above the window mean AND
+         has already reached APPROACH_FRACTION of the threshold. Both halves
+         are required: the sigma test alone fires on noise, and noise at half
+         the statutory limit is not a hazard.
     """
     cfg = threshold_for(sensor_type)
     if not cfg or not values:
@@ -54,7 +63,7 @@ def evaluate(sensor_type: str, values: list[float]) -> dict:
         z = 0.0
 
     over_absolute = latest >= threshold
-    over_relative = z >= Z_TRIGGER
+    over_relative = z >= Z_TRIGGER and latest >= threshold * APPROACH_FRACTION
 
     reason = None
     if over_absolute:

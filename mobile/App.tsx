@@ -1,3 +1,4 @@
+import axios from "axios";
 import { StatusBar } from "expo-status-bar";
 import { useCallback, useEffect, useState } from "react";
 import {
@@ -11,6 +12,7 @@ import {
 } from "react-native";
 
 import { loadToken, login, me, ping, type Duty, type User } from "./src/lib/api";
+import { API_BASE } from "./src/lib/config";
 import { counts } from "./src/lib/db";
 import Capture from "./src/screens/Capture";
 import Duties from "./src/screens/Duties";
@@ -145,8 +147,17 @@ function Login({ onSignedIn }: { onSignedIn: (u: User) => void }) {
     setError(null);
     try {
       onSignedIn(await login(username, password));
-    } catch {
-      setError("Could not sign in. Is the API reachable from this phone?");
+    } catch (err) {
+      // Underground, "wrong password" versus "no signal" are completely
+      // different problems. Never conflate them.
+      const status = axios.isAxiosError(err) ? err.response?.status : undefined;
+
+      if (status === 401) setError("Incorrect username or password.");
+      else if (status === undefined)
+        setError(`Cannot reach the API at ${API_BASE}. Check the connection.`);
+      else if (status >= 500)
+        setError(`API error ${status} — the server is up but failing.`);
+      else setError(`Sign-in failed (HTTP ${status}).`);
     } finally {
       setBusy(false);
     }
