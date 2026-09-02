@@ -21,12 +21,13 @@ import {
 import { loadToken, login, me, ping, type Duty, type User } from "./src/lib/api";
 import { API_BASE } from "./src/lib/config";
 import { counts } from "./src/lib/db";
+import Ask from "./src/screens/Ask";
 import Capture from "./src/screens/Capture";
 import Duties from "./src/screens/Duties";
 import Sync from "./src/screens/Sync";
 import { C } from "./src/theme";
 
-type Tab = "duties" | "capture" | "sync";
+type Tab = "duties" | "capture" | "ask" | "sync";
 
 function AppInner() {
   const insets = useSafeAreaInsets();
@@ -74,7 +75,7 @@ function AppInner() {
         setTab("duties");
         return true;
       }
-      if (tab === "sync") {
+      if (tab === "sync" || tab === "ask") {
         setTab("duties");
         return true;
       }
@@ -99,7 +100,13 @@ function AppInner() {
       <View style={[s.header, { paddingTop: insets.top + 12 }]}>
         <View style={{ flex: 1 }}>
           <Text style={s.headerTitle}>
-            {tab === "duties" ? "Today's Duties" : tab === "sync" ? "Sync & Sign-off" : "Capture Evidence"}
+            {tab === "duties"
+              ? "Today's Duties"
+              : tab === "sync"
+                ? "Sync & Sign-off"
+                : tab === "ask"
+                  ? "Ask ANUPALAN"
+                  : "Capture Evidence"}
           </Text>
           <Text style={s.headerSub}>
             {user.full_name} · mine {user.mine_id}
@@ -146,11 +153,12 @@ function AppInner() {
               <Text style={s.dim}>Pick a duty from the list to capture it.</Text>
             </View>
           ))}
+        {tab === "ask" && <Ask />}
         {tab === "sync" && <Sync online={online} />}
       </View>
 
       <View style={[s.tabs, { paddingBottom: insets.bottom }]}>
-        {(["duties", "capture", "sync"] as Tab[]).map((t) => (
+        {(["duties", "capture", "ask", "sync"] as Tab[]).map((t) => (
           <TouchableOpacity key={t} style={s.tab} onPress={() => setTab(t)}>
             <Text style={[s.tabText, tab === t && s.tabActive]}>
               {t.toUpperCase()}

@@ -384,3 +384,54 @@ In under 40 words: what is happening, why it matters, and what the duty requires
     { maxOutputTokens: MAX_TOKENS },
   );
 }
+
+/* ------------------------------------------------------------------ *
+ * Ledger question answering.
+ * ------------------------------------------------------------------ */
+
+export interface LedgerFact {
+  title: string;
+  clause_ref: string;
+  owner_role: string;
+  status: string;
+  due_date: string | null;
+  evidence_count: number;
+}
+
+/**
+ * Answer a question about the ledger.
+ *
+ * Grounded exactly like clause extraction: the duties are fetched from the API
+ * and passed in, and the model is told to answer only from them. An open chat
+ * box would invite questions it answers from memory - which for statute means
+ * inventing regulation numbers.
+ */
+export async function askLedger(
+  question: string,
+  facts: LedgerFact[],
+): Promise<string> {
+  const model = await loadModel();
+
+  const table = facts
+    .map(
+      (f) =>
+        `- ${f.title} [${f.clause_ref}] owner=${f.owner_role} status=${f.status}` +
+        ` due=${f.due_date ?? "n/a"} evidence=${f.evidence_count}`,
+    )
+    .join("\n");
+
+  return model.execute(
+    text(`You answer questions about a coal mine's statutory compliance ledger.
+
+LEDGER (the only facts you may use):
+${table}
+
+QUESTION: ${question}
+
+Answer in under 60 words, plainly. Cite the clause reference for every duty you
+mention. If the ledger above does not contain the answer, say so - do not use
+outside knowledge, and never state a regulation number that is not listed.`),
+    undefined,
+    { maxOutputTokens: MAX_TOKENS },
+  );
+}
