@@ -10,6 +10,7 @@ import {
 import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  BackHandler,
   StyleSheet,
   Text,
   TextInput,
@@ -62,6 +63,25 @@ function AppInner() {
     const t = setInterval(refreshStatus, 6000);
     return () => clearInterval(t);
   }, [refreshStatus]);
+
+  // Android's back button exits the app by default. Mid-capture that means a
+  // judge pressing back lands on the launcher and the evidence is gone, so
+  // back walks the app's own history first and only leaves from the duty list.
+  useEffect(() => {
+    const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+      if (tab === "capture") {
+        setActive(null);
+        setTab("duties");
+        return true;
+      }
+      if (tab === "sync") {
+        setTab("duties");
+        return true;
+      }
+      return false; // already on duties — let Android close the app
+    });
+    return () => sub.remove();
+  }, [tab]);
 
   if (booting)
     return (
