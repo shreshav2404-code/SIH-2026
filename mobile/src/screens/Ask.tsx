@@ -10,17 +10,25 @@ import {
 } from "react-native";
 
 import { fetchDuties } from "../lib/api";
-import {
-  askLedger,
-  describePhoto,
-  draftObservation,
-  explainWindow,
-  isLoaded,
-  loadModel,
-  modelLocation,
-  type LedgerFact,
-} from "../lib/llm";
 import { describeOrigin, locateModel } from "../lib/modelSource";
+import type { LedgerFact } from "../lib/llm";
+
+/**
+ * react-native-litert-lm creates a native HybridObject at MODULE LOAD time.
+ * Where the runtime skipped native init - an x86_64 emulator, say - that throws
+ * during import and kills the whole app before React renders, with a red
+ * "HybridObject ModelStore not registered" screen.
+ *
+ * So llm.ts is never imported statically. It is pulled in on demand, inside a
+ * try/catch, and a failure degrades this one tab instead of the app.
+ */
+type Llm = typeof import("../lib/llm");
+let llmModule: Llm | null = null;
+
+async function getLlm(): Promise<Llm> {
+  if (!llmModule) llmModule = await import("../lib/llm");
+  return llmModule;
+}
 import { C, mono } from "../theme";
 
 type Turn = { role: "you" | "model"; text: string; note?: string };
@@ -49,7 +57,8 @@ export default function Ask({ lastPhotoUri }: { lastPhotoUri?: string | null }) 
   const warm = useCallback(async () => {
     setState({ kind: "loading", pct: 0 });
     try {
-      await loadModel((pct) => setState({ kind: "loading", pct }));
+      const llm = await getLlm();
+      await llm.loadModel((pct) => setState({ kind: "loading", pct }));
       setState({ kind: "ready" });
     } catch (e) {
       setState({ kind: "error", message: String(e instanceof Error ? e.message : e) });
@@ -57,7 +66,8 @@ export default function Ask({ lastPhotoUri }: { lastPhotoUri?: string | null }) 
   }, []);
 
   useEffect(() => {
-    if (isLoaded()) setState({ kind: "ready" });
+    // Only reflects an already-warm model; never triggers the import itself.
+    if (llmModule?.isLoaded()) setState({ kind: "ready" });
   }, []);
 
   function push(t: Turn) {
@@ -68,7 +78,7 @@ export default function Ask({ lastPhotoUri }: { lastPhotoUri?: string | null }) 
   async function run(label: string, work: () => Promise<string>, note?: string) {
     if (state.kind !== "ready") {
       await warm();
-      if (!isLoaded()) return;
+      if (!llmModule?.isLoaded()) return;
     }
     push({ role: "you", text: label });
     setBusy(true);
@@ -100,7 +110,7 @@ export default function Ask({ lastPhotoUri }: { lastPhotoUri?: string | null }) 
           due_date: d.due_date,
           evidence_count: d.evidence_count,
         }));
-        return askLedger(question, facts);
+        return (await getLlm()).askLedger(question, facts);
       },
       "grounded in the live ledger",
     );
@@ -177,7 +187,10 @@ export default function Ask({ lastPhotoUri }: { lastPhotoUri?: string | null }) 
       <View style={s.banner}>
         <Text style={s.bannerText}>
           ON-DEVICE ·{" "}
-          {modelLocation ? describeOrigin(modelLocation.origin) : "loaded"} · no
+          {llmModule?.modelLocation
+            ? describeOrigin(llmModule.modelLocation.origin)
+            : "loaded"}{" "}
+          · no
           network used
         </Text>
       </View>
@@ -217,8 +230,8 @@ export default function Ask({ lastPhotoUri }: { lastPhotoUri?: string | null }) 
           onPress={() =>
             run(
               "Draft an observation from what I said",
-              () =>
-                draftObservation(
+              async () =>
+                (await getLlm()).draftObservation(
                   "gas reading is high in panel three, ventilation feels weak",
                   null,
                 ),
@@ -231,8 +244,8 @@ export default function Ask({ lastPhotoUri }: { lastPhotoUri?: string | null }) 
           onPress={() =>
             run(
               "What do the methane readings mean?",
-              () =>
-                explainWindow(
+              async () =>
+                (await getLlm()).explainWindow(
                   "methane",
                   { mean: 0.74, max: 1.62, threshold: 1.25, z_max: 4.3 },
                   null,
@@ -247,7 +260,8 @@ export default function Ask({ lastPhotoUri }: { lastPhotoUri?: string | null }) 
             onPress={() =>
               run(
                 "What does the evidence photo show?",
-                () => describePhoto(lastPhotoUri, "What is wrong here?"),
+                async () =>
+                  (await getLlm()).describePhoto(lastPhotoUri, "What is wrong here?"),
                 "native image input",
               )
             }
