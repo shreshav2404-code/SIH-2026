@@ -47,6 +47,11 @@ async function uploadOne(c: Capture): Promise<"created" | "existing"> {
   const res = await api.post("/evidence", form, {
     headers: { "Content-Type": "multipart/form-data" },
     transformRequest: (d) => d, // let RN build the multipart body itself
+    // A photo upload is not a JSON call. The client's 15s default is fine for
+    // reading the ledger but far too tight for a multipart body on the
+    // connection an officer actually has at the surface, and a timeout here
+    // shows up as the misleading "no connection".
+    timeout: 90_000,
   });
 
   await markStatus(c.id, "synced", {
