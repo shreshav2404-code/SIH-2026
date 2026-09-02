@@ -1,0 +1,47 @@
+{
+  "expo": {
+    "name": "ANUPALAN Field",
+    "slug": "anupalan-field",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "in.neuraforge.anupalan"
+    },
+    "android": {
+      "package": "in.neuraforge.anupalan",
+      "adaptiveIcon": {
+        "backgroundColor": "#0F2942",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-sqlite",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "ANUPALAN uses the camera to capture statutory evidence, geo-tagged and hash-chained at the point of capture."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "ANUPALAN records where evidence was captured, so a photo can be checked against the lease boundary."
+        }
+      ]
+    ]
+  }
+}
