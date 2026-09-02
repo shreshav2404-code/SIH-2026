@@ -12,6 +12,7 @@
     },
     "android": {
       "package": "in.neuraforge.anupalan",
+      "minSdkVersion": 26,
       "adaptiveIcon": {
         "backgroundColor": "#0F2942",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -30,6 +31,7 @@
     },
     "plugins": [
       "expo-sqlite",
+      "react-native-litert-lm",
       [
         "expo-camera",
         {
