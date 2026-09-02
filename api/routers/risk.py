@@ -108,7 +108,12 @@ def recompute(
 
     # Mine-level score = the worst duty. A mine is as compliant as its weakest
     # obligation, not its average one.
+    #
+    # flush() is required: the session is autoflush=False, so without it the
+    # MAX below cannot see the rows just added and silently returns None,
+    # scoring every mine 0.0 while its duties sit at 98.
     if obligations:
+        db.flush()
         worst = db.scalar(
             select(func.max(RiskScore.score)).where(
                 RiskScore.mine_id == mine_id_r, RiskScore.computed_at == now
