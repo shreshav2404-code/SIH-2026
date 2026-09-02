@@ -1,0 +1,112 @@
+{
+  "_meta": {
+    "purpose": "Three CIL mines with lease polygons, loaded into PostGIS as GEOMETRY(Polygon,4326).",
+    "honesty_note": "Polygons are ILLUSTRATIVE rectangles placed at each mine's approximate real coordinates. They are not surveyed lease boundaries — no public authoritative GeoJSON of CIL lease boundaries was available. Say 'representative boundary' to a judge, never 'the actual lease'. The geometry pipeline (ST_Contains, ST_Difference, ST_Area) is real; only these coordinates are stand-ins.",
+    "coordinate_order": "GeoJSON is [longitude, latitude]. Rings close by repeating the first point.",
+    "srid": 4326
+  },
+
+  "mines": [
+    {
+      "id": 1,
+      "name": "Gevra OC",
+      "subsidiary": "SECL",
+      "type": "opencast",
+      "centroid": { "lat": 22.3400, "lon": 82.5700 },
+      "note": "Korba, Chhattisgarh. One of India's largest opencast mines. Used for the geo-compliance and boundary-breach demo.",
+      "lease_geom": {
+        "type": "Polygon",
+        "coordinates": [[
+          [82.5400, 22.3150],
+          [82.6000, 22.3150],
+          [82.6000, 22.3650],
+          [82.5400, 22.3650],
+          [82.5400, 22.3150]
+        ]]
+      },
+      "excavation_geom": {
+        "type": "Polygon",
+        "coordinates": [[
+          [82.5850, 22.3400],
+          [82.6180, 22.3400],
+          [82.6180, 22.3600],
+          [82.5850, 22.3600],
+          [82.5850, 22.3400]
+        ]],
+        "note": "Deliberately crosses the eastern boundary. ST_Difference against lease_geom yields the area outside — this is demo moment 4."
+      }
+    },
+    {
+      "id": 2,
+      "name": "Jhanjra UG",
+      "subsidiary": "ECL",
+      "type": "underground",
+      "centroid": { "lat": 23.7000, "lon": 87.1200 },
+      "note": "Raniganj coalfield, West Bengal. Underground — carries the ventilation, strata and rescue duties, and the offline-capture demo.",
+      "lease_geom": {
+        "type": "Polygon",
+        "coordinates": [[
+          [87.0950, 23.6800],
+          [87.1450, 23.6800],
+          [87.1450, 23.7200],
+          [87.0950, 23.7200],
+          [87.0950, 23.6800]
+        ]]
+      }
+    },
+    {
+      "id": 3,
+      "name": "Bhubaneswari OC",
+      "subsidiary": "MCL",
+      "type": "opencast",
+      "centroid": { "lat": 20.9500, "lon": 85.1000 },
+      "note": "Talcher coalfield, Odisha. Third mine so the regulator role has more than one to compare.",
+      "lease_geom": {
+        "type": "Polygon",
+        "coordinates": [[
+          [85.0750, 20.9300],
+          [85.1250, 20.9300],
+          [85.1250, 20.9700],
+          [85.0750, 20.9700],
+          [85.0750, 20.9300]
+        ]]
+      }
+    }
+  ],
+
+  "users": [
+    {
+      "username": "manager.gevra",
+      "full_name": "P. Kujur",
+      "password": "demo1234",
+      "role": "mine_manager",
+      "mine_id": 1,
+      "certificate_no": "MGR/2019/4471"
+    },
+    {
+      "username": "safety.gevra",
+      "full_name": "R. Minz",
+      "password": "demo1234",
+      "role": "safety_officer",
+      "mine_id": 1,
+      "certificate_no": "SO/2021/1188"
+    },
+    {
+      "username": "regulator.dgms",
+      "full_name": "DGMS Regional Inspector",
+      "password": "demo1234",
+      "role": "regulator",
+      "mine_id": null,
+      "certificate_no": null
+    }
+  ],
+
+  "sensor_thresholds": {
+    "_note": "Static threshold table. Detection is a rolling mean plus z-score against these — arithmetic, not a model. Each threshold names the clause it protects, which is what makes a breach a compliance alert.",
+    "methane": { "threshold": 1.25, "unit": "%", "clause_ref": "CMR 2017 · Reg. 46", "severity": "critical" },
+    "water_level": { "threshold": 3.5, "unit": "m", "clause_ref": "CMR 2017 · Reg. 106", "severity": "warning" },
+    "strata_convergence": { "threshold": 3.0, "unit": "mm/24h", "clause_ref": "CMR 2017 · Reg. 108", "severity": "critical" },
+    "vibration": { "threshold": 8.0, "unit": "mm/s", "clause_ref": "CMR 2017 · Reg. 106", "severity": "warning" },
+    "pm10": { "threshold": 100.0, "unit": "ug/m3", "clause_ref": "CPCB · CAAQMS uptime", "severity": "warning" }
+  }
+}

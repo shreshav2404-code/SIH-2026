@@ -1,0 +1,28 @@
+# Phase 1 — everything the API, database and dashboard need. ~40 MB.
+# Install this first; it unblocks all backend work.
+# The ML stack lives in requirements-ml.txt and can install in the background.
+
+fastapi
+uvicorn[standard]
+python-multipart
+pydantic
+pydantic-settings
+python-dotenv
+
+sqlalchemy
+alembic
+psycopg2-binary
+pgvector
+geoalchemy2
+shapely
+
+python-jose[cryptography]
+passlib[bcrypt]
+
+numpy
+pandas
+joblib
+pillow
+
+httpx
+apscheduler

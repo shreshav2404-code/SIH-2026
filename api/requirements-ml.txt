@@ -1,0 +1,14 @@
+# Phase 2 — the ML stack. ~600 MB, dominated by PyTorch (CPU build).
+# Installs in the background; nothing in phase 1 depends on it.
+#
+# Until this lands, run the seeder with:
+#     python api/seed/seed.py --skip-embed --skip-model
+#
+# scikit-learn + xgboost  -> the risk score (deterministic, auditable)
+# sentence-transformers   -> MiniLM clause retrieval (pulls torch)
+# ultralytics             -> YOLOv8n evidence screening (pulls torch, torchvision)
+
+scikit-learn
+xgboost
+sentence-transformers
+ultralytics
