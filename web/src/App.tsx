@@ -1,4 +1,4 @@
-import { FileCheck2, LayoutDashboard, Map, Table2 } from "lucide-react";
+import { BookText, FileCheck2, LayoutDashboard, Map, Table2 } from "lucide-react";
 import { NavLink, Navigate, Route, Routes } from "react-router-dom";
 
 import { useAuth } from "./lib/auth";
@@ -7,10 +7,12 @@ import Login from "./pages/Login";
 import MapView from "./pages/MapView";
 import Overview from "./pages/Overview";
 import Returns from "./pages/Returns";
+import Rulebook from "./pages/Rulebook";
 
 const NAV = [
   { to: "/", label: "Overview", icon: LayoutDashboard },
   { to: "/ledger", label: "Ledger", icon: Table2 },
+  { to: "/rulebook", label: "Rulebook", icon: BookText },
   { to: "/map", label: "Map", icon: Map },
   { to: "/returns", label: "Returns", icon: FileCheck2 },
 ];
@@ -78,6 +80,7 @@ function Shell() {
         <Routes>
           <Route path="/" element={<Overview />} />
           <Route path="/ledger" element={<Ledger />} />
+          <Route path="/rulebook" element={<Rulebook />} />
           <Route path="/map" element={<MapView />} />
           <Route path="/returns" element={<Returns />} />
           <Route path="*" element={<Navigate to="/" replace />} />

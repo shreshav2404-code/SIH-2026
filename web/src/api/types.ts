@@ -139,3 +139,45 @@ export interface VerifyResult {
   checked: number;
   first_broken: { evidence_id: number; expected: string; found: string } | null;
 }
+
+// ---- rulebook (Regulation-as-Code) ----
+// Retrieval runs on the backend with MiniLM; extraction runs on-device in the
+// field app. The dashboard drives both so a circular can be demonstrated
+// without a phone.
+
+export interface ClauseMatch {
+  statute_id: number;
+  clause_ref: string;
+  act: string;
+  text: string;
+  similarity: number;
+}
+
+export interface RetrieveChunk {
+  query_chunk: string;
+  matches: ClauseMatch[];
+}
+
+export interface RetrieveOut {
+  chunks: RetrieveChunk[];
+}
+
+export interface ExtractedDuty {
+  title: string;
+  owner_role: string;
+  frequency: string;
+  evidence_type: string;
+  clause_ref: string;
+}
+
+export interface RejectedDuty {
+  index: number;
+  title?: string;
+  clause_ref?: string;
+  reason: "CITATION_REQUIRED" | "CLAUSE_NOT_IN_CORPUS";
+}
+
+export interface DutiesOut {
+  created: Obligation[];
+  rejected: RejectedDuty[];
+}
