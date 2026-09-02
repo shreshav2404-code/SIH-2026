@@ -9,10 +9,10 @@ Updated 2026-09-02. Tracks the five demo moments and the 36-hour milestones.
 | # | Moment | Backend | Dashboard | Mobile | On-device |
 |---|--------|---------|-----------|--------|-----------|
 | 1 | **Digital Rulebook** | 🟡 endpoints live, needs MiniLM | ⬜ | ⬜ | ⬜ |
-| 2 | **Offline capture** | ✅ **proven** | ⬜ | ⬜ | n/a |
-| 3 | **Hazard early-warning** | ✅ **proven** | ⬜ | ⬜ | ⬜ |
-| 4 | **Geo-compliance** | ✅ **proven** | ⬜ | ⬜ | n/a |
-| 5 | **Auto-drafted return** | ✅ **proven** | ⬜ | ⬜ | ⬜ |
+| 2 | **Offline capture** | ✅ **proven** | ✅ chain status | ⬜ | n/a |
+| 3 | **Hazard early-warning** | ✅ **proven** | ✅ **live chart + alerts** | ⬜ | ⬜ |
+| 4 | **Geo-compliance** | ✅ **proven** | ✅ **map renders breach** | ⬜ | n/a |
+| 5 | **Auto-drafted return** | ✅ **proven** | ✅ **draft + sign-off** | ⬜ | ⬜ |
 
 ✅ verified working · 🟡 built, blocked · ⬜ not started
 
@@ -70,14 +70,25 @@ Blocks: `/rulebook/retrieve` (503), `/risk/*` (503), YOLOv8n vision screening.
 
 ---
 
+## Running it
+
+```bash
+docker compose up -d                                   # database
+cd api && ../.venv/Scripts/python -m uvicorn main:app --port 8000
+cd web && npm run dev                                  # dashboard :5173
+python tools/sensor_sim.py --mine 1                    # readings every 2s
+```
+
+Sign in as `manager.gevra` / `demo1234`.
+
 ## Next
 
-1. **React dashboard** — ledger table, KPI row, alerts panel, risk bars,
-   Leaflet map, return sign-off. Nothing visual exists yet.
-2. **Expo mobile app** — duty list, camera capture, SQLite queue, sync.
-3. Once ML lands: re-seed with embeddings, train risk model, verify rulebook
-   extraction returns cited JSON.
-4. On-device Gemma wiring (build plan says hours 24–30, after the plumbing holds).
+1. **Expo mobile app** — duty list, camera capture, SQLite queue, sync.
+   Nothing exists yet; this is the biggest remaining gap.
+2. Once ML lands: re-seed with embeddings, train the risk model, verify
+   rulebook extraction returns cited JSON, wire risk bars to real scores.
+3. On-device Gemma wiring (build plan says hours 24–30, after the plumbing holds).
+4. Evidence photo thumbnails on the dashboard once mobile capture exists.
 
 ---
 
