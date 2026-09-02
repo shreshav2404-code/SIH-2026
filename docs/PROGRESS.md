@@ -6,17 +6,48 @@ Updated 2026-09-02. Tracks the five demo moments and the 36-hour milestones.
 
 ## The five demo moments
 
-| # | Moment | Backend | Dashboard | Mobile | On-device |
+| # | Moment | Backend | Dashboard | Mobile (emulator) | On-device model |
 |---|--------|---------|-----------|--------|-----------|
-| 1 | **Digital Rulebook** | 🟡 endpoints live, needs MiniLM | ⬜ | ⬜ | ⬜ |
-| 2 | **Offline capture** | ✅ **proven** | ✅ chain status | ⬜ | n/a |
-| 3 | **Hazard early-warning** | ✅ **proven** | ✅ **live chart + alerts** | ⬜ | ⬜ |
-| 4 | **Geo-compliance** | ✅ **proven** | ✅ **map renders breach** | ⬜ | n/a |
-| 5 | **Auto-drafted return** | ✅ **proven** | ✅ **draft + sign-off** | ⬜ | ⬜ |
+| 1 | **Digital Rulebook** | ✅ **proven** | ⬜ paste-box UI | ⬜ | ❌ needs arm64 |
+| 2 | **Offline capture** | ✅ **proven** | ✅ chain status | ✅ **proven** | n/a |
+| 3 | **Hazard early-warning** | ✅ **proven** | ✅ **live chart + alerts** | ⬜ | ❌ needs arm64 |
+| 4 | **Geo-compliance** | ✅ **proven** | ✅ **map renders breach** | ✅ inside-lease check | n/a |
+| 5 | **Auto-drafted return** | ✅ **proven** | ✅ **draft + sign-off** | ⬜ | ❌ needs arm64 |
+
+### The on-device model cannot run on this laptop
+
+Emulator 37.x removed ARM translation on x86_64 hosts, and the LiteRT-LM
+wrapper refuses x86_64 at runtime:
+
+```
+W LiteRTLMPackage: Skipping LiteRTLM native init on unsupported primary ABI: x86_64
+```
+
+Widening `abiFilters` does put `lib/x86_64/liblitertlm_jni.so` (24 MB) in the
+APK, but the Kotlin layer still declines to initialise. **Gemma needs a
+physical arm64 Android device.** Everything else runs on the emulator.
 
 ✅ verified working · 🟡 built, blocked · ⬜ not started
 
 ---
+
+## Verified on the emulator, end to end
+
+Ran on `anupalan_pixel7pro` (x86_64, Android 15, 6 GB RAM), not just typechecked:
+
+- **Install → sign in → ledger.** App reaches the API on `10.0.2.2:8000`,
+  shows "Online", renders overdue duties with red day-counts and clause refs.
+- **Capture.** Camera live, GPS locks 22.3400 N 82.5700 E, the app calls
+  `/geo/contains` and PostGIS answers **inside lease: Yes**, timestamp locks to
+  the device clock. All four fields shown `locked` — none typeable.
+- **Queue → sync → database.** Saved offline, uploaded on demand, landed as
+  evidence row 1 with `inside_lease=t` and an intact hash chain. YOLOv8n
+  screened the photo on upload; the file is on disk at `api/storage/1/1.jpg`.
+- **Dashboard reacted.** Overdue dropped 8 → 7, evidence chain "Intact, 1
+  record verified", the duty flipped to SUBMITTED.
+
+**An emulator has no GPS.** Set a mock fix or capture waits forever:
+`adb emu geo fix 82.57 22.34` (inside the Gevra polygon).
 
 ## Verified, not assumed
 
