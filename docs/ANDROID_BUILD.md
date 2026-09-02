@@ -89,7 +89,42 @@ inherits. **Claude writes and typechecks the code; a human presses Build.**
 
 ---
 
-## 4. Emulator must be arm64, and resized
+## 4. The arm64 emulator does NOT work — the build plan is out of date
+
+The plan says to create an arm64-v8a AVD and accept ~2–4 tok/s under binary
+translation. **Android Emulator 37.x removed that translation.** The AVD
+refuses to start:
+
+```
+FATAL | Avd's CPU Architecture 'arm64' is not supported by the QEMU2
+        emulator on x86_64 host. System image must match the host architecture.
+```
+
+There is no flag or workaround. On an Intel laptop, arm64 emulation is gone.
+
+### The workaround: build the model for x86_64
+
+`react-native-litert-lm/android/build.gradle` declares `abiFilters 'arm64-v8a'`,
+but that is the **wrapper's** restriction. The engine AAR
+(`litertlm-android-0.15.0.aar`) ships **both** `arm64-v8a` and `x86_64`.
+Widening the filter to
+
+```gradle
+abiFilters 'arm64-v8a', 'x86_64'
+```
+
+produces `lib/x86_64/liblitertlm_jni.so` (24.1 MB) in the APK, so the model
+has a chance of loading in an ordinary x86_64 emulator.
+
+**This edit is in `node_modules` and `npm install` erases it.** Reapply it at
+`node_modules/react-native-litert-lm/android/build.gradle`.
+
+**Unverified caveat:** the APK gets `lib/arm64-v8a/libLiteRTLM.so` but no
+x86_64 equivalent. The x86_64 JNI is 24.1 MB against arm64's 20.2 MB, which
+suggests the engine is statically linked there — but that is inference. Only
+loading a model on an x86_64 emulator proves it.
+
+## 5. AVD sizing (applies to whichever ABI)
 
 The default Pixel AVD is x86_64 and **cannot load the model** — `loadModel`
 crashes silently. Everything else in the app runs fine on it, so the failure

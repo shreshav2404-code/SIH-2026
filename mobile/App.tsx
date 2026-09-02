@@ -1,9 +1,15 @@
 import axios from "axios";
 import { StatusBar } from "expo-status-bar";
+// react-native-safe-area-context, not react-native. RN's SafeAreaView is
+// deprecated and a no-op for the Android status bar, so the header painted
+// straight over the system clock and the duty list was clipped at the top.
+import {
+  SafeAreaProvider,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  SafeAreaView,
   StyleSheet,
   Text,
   TextInput,
@@ -21,7 +27,8 @@ import { C } from "./src/theme";
 
 type Tab = "duties" | "capture" | "sync";
 
-export default function App() {
+function AppInner() {
+  const insets = useSafeAreaInsets();
   const [user, setUser] = useState<User | null>(null);
   const [booting, setBooting] = useState(true);
   const [tab, setTab] = useState<Tab>("duties");
@@ -66,10 +73,10 @@ export default function App() {
   if (!user) return <Login onSignedIn={setUser} />;
 
   return (
-    <SafeAreaView style={s.app}>
+    <View style={s.app}>
       <StatusBar style="light" />
 
-      <View style={s.header}>
+      <View style={[s.header, { paddingTop: insets.top + 12 }]}>
         <View style={{ flex: 1 }}>
           <Text style={s.headerTitle}>
             {tab === "duties" ? "Today's Duties" : tab === "sync" ? "Sync & Sign-off" : "Capture Evidence"}
@@ -122,7 +129,7 @@ export default function App() {
         {tab === "sync" && <Sync online={online} />}
       </View>
 
-      <View style={s.tabs}>
+      <View style={[s.tabs, { paddingBottom: insets.bottom }]}>
         {(["duties", "capture", "sync"] as Tab[]).map((t) => (
           <TouchableOpacity key={t} style={s.tab} onPress={() => setTab(t)}>
             <Text style={[s.tabText, tab === t && s.tabActive]}>
@@ -132,7 +139,16 @@ export default function App() {
           </TouchableOpacity>
         ))}
       </View>
-    </SafeAreaView>
+    </View>
+  );
+}
+
+export default function App() {
+  // SafeAreaProvider must wrap everything that reads insets.
+  return (
+    <SafeAreaProvider>
+      <AppInner />
+    </SafeAreaProvider>
   );
 }
 
@@ -164,7 +180,7 @@ function Login({ onSignedIn }: { onSignedIn: (u: User) => void }) {
   }
 
   return (
-    <SafeAreaView style={[s.app, s.centre]}>
+    <View style={[s.app, s.centre]}>
       <StatusBar style="dark" />
       <Text style={s.brand}>ANUPALAN</Text>
       <Text style={s.dim}>Field inspection · Coal India</Text>
@@ -193,12 +209,15 @@ function Login({ onSignedIn }: { onSignedIn: (u: User) => void }) {
           <Text style={s.primaryText}>{busy ? "Signing in…" : "Sign in"}</Text>
         </TouchableOpacity>
       </View>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const s = StyleSheet.create({
   app: { flex: 1, backgroundColor: C.bg },
+  // Top inset paints in the header colour so the status bar blends
+  // into the header instead of showing a pale band above it.
+  appDark: { flex: 1, backgroundColor: C.header },
   centre: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
   header: {
     flexDirection: "row", alignItems: "center", gap: 6,

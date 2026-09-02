@@ -17,11 +17,10 @@ import {
   type MultimodalPart,
 } from "react-native-litert-lm";
 
-/**
- * Pushed once over the cable, never over venue wifi:
- *     adb push gemma-4-E4B-it.litertlm /sdcard/Download/
- */
-export const MODEL_PATH = "/sdcard/Download/gemma-4-E4B-it.litertlm";
+import { ensureModel, type ModelLocation } from "./modelSource";
+
+/** Where the model was actually found, for the splash screen to report. */
+export let modelLocation: ModelLocation | null = null;
 
 /** Tight prompts, short answers. Long generation is where on-device feels slow. */
 const MAX_TOKENS = 150;
@@ -92,6 +91,18 @@ export function loadModel(
   if (loading) return loading;
 
   loading = (async () => {
+    // Resolves the model wherever it is: already in app storage, bundled in
+    // the APK (-PbundleModel=true), or pushed to /sdcard/Download with adb.
+    // On the emulator it is the pushed copy.
+    modelLocation = await ensureModel(onProgress);
+    if (!modelLocation.path) {
+      throw new Error(
+        "Model not found on this device. Push it over the cable:\n" +
+          "  adb push gemma-4-E4B-it.litertlm /sdcard/Download/",
+      );
+    }
+    const MODEL_PATH = modelLocation.path;
+
     const instance = createLLM({ enableMemoryTracking: true });
 
     try {
