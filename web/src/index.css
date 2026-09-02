@@ -1,0 +1,42 @@
+@import "tailwindcss";
+@import "leaflet/dist/leaflet.css";
+
+:root {
+  --ink: #0f2942;
+  --ink-soft: #4a6580;
+  --line: #dbe4ed;
+  --bg: #f4f7fa;
+  --panel: #ffffff;
+  --accent: #14539a;
+  --ok: #17734a;
+  --warn: #9a5c00;
+  --crit: #b3261e;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Clause references read as citations, not UI chrome. */
+.clause {
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 11.5px;
+  color: var(--accent);
+  letter-spacing: -0.01em;
+}
+
+.leaflet-container {
+  background: #e8eef4;
+  font: inherit;
+}

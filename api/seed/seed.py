@@ -159,8 +159,12 @@ def make_obligations(db, rows, mines) -> int:
 
             freq = c["frequency"]
             if freq in CADENCE_DAYS:
-                # deterministic spread: -3 .. +10 days, stable across runs
-                offset = (st.id * 7 + mine.id * 3) % 14 - 3
+                # Deterministic spread of -5..+9 days, stable across runs, so
+                # the ledger shows overdue, due-today and upcoming rows.
+                # The multiplier MUST be coprime to the modulus, or the offsets
+                # collapse onto a few dates: gcd(7,15)=1 walks every residue,
+                # where 7%14 and 5%15 both leave gaps.
+                offset = (st.id * 7 + mine.id * 3) % 15 - 5
                 due = today + timedelta(days=offset)
             else:
                 due = None
