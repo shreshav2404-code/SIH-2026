@@ -1,6 +1,6 @@
 # ANUPALAN — Build Progress
 
-Updated 2026-09-02. Tracks the five demo moments and the 36-hour milestones.
+Updated 2026-09-03. Tracks the five demo moments and the 36-hour milestones.
 
 ---
 
@@ -77,10 +77,10 @@ Each of these was run against the live API, not just written:
 |---|---|---|
 | 0–2 | Repo, compose up, DB with both extensions, API contract written | ✅ |
 | 2–6 | Schema migrated, seed loaded, auth returns a token | ✅ |
-| 6–12 | Ledger endpoints live and rendering in the dashboard | 🟡 API done, dashboard not started |
-| 12–18 | Evidence capture end to end, sensor sim streaming | 🟡 API done, mobile not started |
-| 18–24 | Rulebook returns cited JSON, risk scoring, alerts firing | 🟡 alerts done; rulebook+risk blocked on ML |
-| 24–30 | Map, vision, return drafting and sign-off | 🟡 API done, map not started |
+| 6–12 | Ledger endpoints live and rendering in the dashboard | ✅ |
+| 12–18 | Evidence capture end to end, sensor sim streaming | ✅ verified on the emulator |
+| 18–24 | Rulebook returns cited JSON, risk scoring, alerts firing | ✅ |
+| 24–30 | Map, vision, return drafting and sign-off | ✅ |
 | 30–34 | **FEATURE FREEZE.** Polish, demo dataset, OBS recording | ⬜ |
 | 34–36 | Three dry runs against the clock | ⬜ |
 
@@ -109,19 +109,6 @@ immediately. The agent shell has a non-stock environment
 **So: Claude writes and typechecks the code; a human presses Build → Make
 Project.** Do not spend more time on the CLI.
 
-## Blocked
-
-**ML stack still installing.** PyPI is slow on this connection (~150 KB/s with
-stalls; HuggingFace ran at 6.5 MB/s, so it is PyPI specifically). Split
-requirements so nothing else waits:
-
-- `requirements-core.txt` — ✅ installed, API runs
-- `requirements-ml.txt` — 🔄 installing (xgboost 101 MB, then PyTorch)
-
-Until it lands: `python api/seed/seed.py --reset --skip-embed --skip-model`
-
-Blocks: `/rulebook/retrieve` (503), `/risk/*` (503), YOLOv8n vision screening.
-
 ---
 
 ## Running it
@@ -135,14 +122,28 @@ python tools/sensor_sim.py --mine 1                    # readings every 2s
 
 Sign in as `manager.gevra` / `demo1234`.
 
+## Running the emulator demo
+
+```bash
+# 1. the three services (see "Running it" above), then:
+emulator -avd anupalan_pixel7pro          # x86_64, 6 GB, Android 15
+adb install -r mobile/android/app/build/outputs/apk/debug/app-debug.apk
+adb emu geo fix 82.57 22.34               # an emulator has NO GPS
+npx expo start --dev-client --port 8081   # debug build needs Metro
+```
+
+Grant permissions once: `adb shell pm grant in.neuraforge.anupalan android.permission.CAMERA`
+(and `ACCESS_FINE_LOCATION`).
+
 ## Next
 
-1. **Expo mobile app** — duty list, camera capture, SQLite queue, sync.
-   Nothing exists yet; this is the biggest remaining gap.
-2. Once ML lands: re-seed with embeddings, train the risk model, verify
-   rulebook extraction returns cited JSON, wire risk bars to real scores.
-3. On-device Gemma wiring (build plan says hours 24–30, after the plumbing holds).
-4. Evidence photo thumbnails on the dashboard once mobile capture exists.
+1. **Rulebook paste-box on the dashboard** — the backend is proven; moment 1
+   has no UI yet. Highest-value remaining item, it is the headline claim.
+2. **Evidence photo thumbnails** on the dashboard, now that capture works.
+3. Demo dataset: seed a believable spread rather than everything at 92–98 risk.
+4. OBS fallback recording of all five moments.
+5. On-device Gemma — needs a physical arm64 phone; nothing more to do on this
+   laptop.
 
 ---
 
