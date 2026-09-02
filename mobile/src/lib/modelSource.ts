@@ -22,9 +22,23 @@ export const MODEL_FILENAME = "gemma-4-E4B-it.litertlm";
 /** Byte-exact size of the official file. A short file means a truncated copy. */
 export const MODEL_BYTES = 3_659_530_240;
 
-/** Where `adb push` puts it during development. */
-export const PUSHED_PATH = `/sdcard/Download/${MODEL_FILENAME}`;
-
+/**
+ * Where a pushed model must live.
+ *
+ * expo-file-system exposes only `cache`, `bundle` and `document` — there is no
+ * external-files directory in its API, so `/sdcard/...` is not reachable from
+ * JS at all. (And since Android 11 an app cannot read shared storage anyway
+ * without MANAGE_EXTERNAL_STORAGE.) The model therefore has to sit in the
+ * app's own document directory.
+ *
+ * adb cannot write there directly, but on a debuggable build run-as can:
+ *
+ *   adb push gemma-4-E4B-it.litertlm /data/local/tmp/
+ *   adb shell run-as in.neuraforge.anupalan  *     cp /data/local/tmp/gemma-4-E4B-it.litertlm files/
+ *   adb shell rm /data/local/tmp/gemma-4-E4B-it.litertlm
+ *
+ * For a release build, bundle it instead: -PbundleModel=true.
+ */
 export type ModelOrigin = "app-storage" | "bundled-asset" | "pushed" | "missing";
 
 export interface ModelLocation {
@@ -50,16 +64,6 @@ export function locateModel(): ModelLocation {
   const extracted = extractedFile();
   if (extracted.exists && (extracted.size ?? 0) > 0) {
     return describe(extracted.uri, "app-storage", extracted.size ?? 0);
-  }
-
-  const pushed = new File(PUSHED_PATH);
-  try {
-    if (pushed.exists && (pushed.size ?? 0) > 0) {
-      return describe(PUSHED_PATH, "pushed", pushed.size ?? 0);
-    }
-  } catch {
-    // No permission to read shared storage on this device — fine, it just
-    // means the pushed copy is not an option here.
   }
 
   return { path: null, origin: "missing", bytes: 0, complete: false };
@@ -95,9 +99,7 @@ export async function ensureModel(
 
   const asset = new File(`${Paths.bundle}/${MODEL_FILENAME}`);
   if (!asset.exists) {
-    // Not bundled. If a pushed copy exists, use it as-is — no need to
-    // duplicate 3.66 GB just to move it.
-    return found.path ? found : { path: null, origin: "missing", bytes: 0, complete: false };
+    return { path: null, origin: "missing", bytes: 0, complete: false };
   }
 
   onProgress?.(0);
@@ -116,7 +118,7 @@ export function describeOrigin(origin: ModelOrigin): string {
     case "bundled-asset":
       return "extracted from the app bundle";
     case "pushed":
-      return "loaded from Download (adb push)";
+      return "pushed into app storage";
     case "missing":
       return "not found on this device";
   }

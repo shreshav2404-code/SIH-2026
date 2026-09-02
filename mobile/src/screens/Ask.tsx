@@ -26,8 +26,23 @@ type Llm = typeof import("../lib/llm");
 let llmModule: Llm | null = null;
 
 async function getLlm(): Promise<Llm> {
-  if (!llmModule) llmModule = await import("../lib/llm");
-  return llmModule;
+  if (llmModule) return llmModule;
+  try {
+    llmModule = await import("../lib/llm");
+    // A partially-initialised module leaves the exports undefined rather than
+    // throwing, which surfaces later as "undefined is not a function" from
+    // somewhere unrelated. Fail here instead, where the cause is obvious.
+    if (typeof llmModule.loadModel !== "function") {
+      throw new Error("engine did not initialise");
+    }
+    return llmModule;
+  } catch (e) {
+    llmModule = null;
+    throw new Error(
+      "The LiteRT-LM engine is not available on this device. " +
+        (e instanceof Error ? e.message : String(e)),
+    );
+  }
 }
 import { C, mono } from "../theme";
 
