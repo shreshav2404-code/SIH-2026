@@ -95,12 +95,25 @@ def health() -> JSONResponse:
     )
 
 
+from routers import alerts as alerts_router  # noqa: E402
 from routers import auth as auth_router  # noqa: E402
 from routers import evidence as evidence_router  # noqa: E402
+from routers import geo as geo_router  # noqa: E402
 from routers import obligations as obligations_router  # noqa: E402
+from routers import returns as returns_router  # noqa: E402
+from routers import risk as risk_router  # noqa: E402
+from routers import rulebook as rulebook_router  # noqa: E402
+from routers import sensors as sensors_router  # noqa: E402
 
-app.include_router(auth_router.router)
-app.include_router(obligations_router.router)
-app.include_router(evidence_router.router)
-
-# Still to land: rulebook, sensors, alerts, risk, geo, returns.
+for r in (
+    auth_router,
+    obligations_router,
+    rulebook_router,
+    evidence_router,
+    sensors_router,
+    alerts_router,
+    risk_router,
+    geo_router,
+    returns_router,
+):
+    app.include_router(r.router)

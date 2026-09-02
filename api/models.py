@@ -182,6 +182,11 @@ class Alert(Base):
     message: Mapped[str] = mapped_column(Text)
     source: Mapped[str] = mapped_column(String(16), default="rule")
 
+    # Stored, not derived. The threshold table knows which clause a breach
+    # threatens even when this mine has no matching obligation — an opencast
+    # mine has no ventilation duty, but a methane reading still cites Reg. 46.
+    clause_ref: Mapped[str | None] = mapped_column(String(128), nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), index=True
     )
