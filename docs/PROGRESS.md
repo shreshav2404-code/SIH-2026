@@ -55,6 +55,29 @@ Each of these was run against the live API, not just written:
 
 ---
 
+## Build the Android app from Android Studio, not the CLI
+
+`gradlew.bat` cannot build on this machine from an agent shell. Any Gradle
+daemon it spawns is unreachable over loopback:
+
+```
+FAILURE: java.io.IOException: Unable to establish loopback connection
+  daemon side: TcpIncomingConnector — SocketException: Invalid argument: connect
+```
+
+Ruled out by testing, not assumption: java resolves `localhost` to both
+127.0.0.1 and ::1 and cross-process connects fine; only Windows Defender is
+installed; no firewall rule touches java; Gradle itself runs (`--version` is
+fine); `preferIPv4Stack` does not help; it reproduces writing to a file, so it
+is not a truncated pipe.
+
+**Android Studio builds without any of this trouble** — its daemon connects
+immediately. The agent shell has a non-stock environment
+(`NoDefaultCurrentDirectoryInExePath=1`), which the daemon inherits.
+
+**So: Claude writes and typechecks the code; a human presses Build → Make
+Project.** Do not spend more time on the CLI.
+
 ## Blocked
 
 **ML stack still installing.** PyPI is slow on this connection (~150 KB/s with

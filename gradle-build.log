@@ -1,4 +1,4 @@
-Starting a Gradle Daemon (subsequent builds will be faster)
+Starting a Gradle Daemon, 1 busy Daemon could not be reused, use --status for details
 
 FAILURE: Build failed with an exception.
 
