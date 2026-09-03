@@ -98,6 +98,7 @@ def health() -> JSONResponse:
 from routers import alerts as alerts_router  # noqa: E402
 from routers import auth as auth_router  # noqa: E402
 from routers import evidence as evidence_router  # noqa: E402
+from routers import finetune as finetune_router  # noqa: E402
 from routers import geo as geo_router  # noqa: E402
 from routers import obligations as obligations_router  # noqa: E402
 from routers import reports as reports_router  # noqa: E402
@@ -117,5 +118,6 @@ for r in (
     geo_router,
     returns_router,
     reports_router,
+    finetune_router,
 ):
     app.include_router(r.router)

@@ -248,3 +248,43 @@ class StatutoryReturn(Base):
     __table_args__ = (
         UniqueConstraint("mine_id", "period", "return_type", name="uq_return_period"),
     )
+
+
+class FineTuneJob(Base):
+    """A fine-tuning run, tracked here but NOT executed here.
+
+    Be clear about the division, because it is the honest part of this feature:
+    the dashboard prepares the dataset, records the configuration, and shows
+    the outcome. The training itself happens on a GPU elsewhere - free Colab
+    is the intended route - because a laptop running Postgres and a dev server
+    cannot fine-tune a 1.7B model, and pretending otherwise would be a demo
+    that falls over the moment anyone asks to watch it run.
+
+    `metrics` holds whatever the training run reported back: loss curve, steps,
+    eval numbers. Free-form because the shape depends on the trainer used.
+    """
+
+    __tablename__ = "finetune_job"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    mine_id: Mapped[int | None] = mapped_column(
+        ForeignKey("mine.id"), nullable=True, index=True
+    )
+
+    name: Mapped[str] = mapped_column(String(128))
+    base_model: Mapped[str] = mapped_column(String(64))
+    dataset_kind: Mapped[str] = mapped_column(String(32))
+    examples: Mapped[int] = mapped_column(Integer, default=0)
+
+    # prepared -> running -> finished | failed. Advanced by whoever runs the
+    # training, via PATCH, since nothing here can observe a Colab notebook.
+    status: Mapped[str] = mapped_column(String(16), default="prepared", index=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    metrics: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )

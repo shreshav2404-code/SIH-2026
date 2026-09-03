@@ -1,5 +1,6 @@
 import {
   BookText,
+  Brain,
   Camera,
   FileCheck2,
   LayoutDashboard,
@@ -14,6 +15,7 @@ import Login from "./pages/Login";
 import MapView from "./pages/MapView";
 import Overview from "./pages/Overview";
 import Evidence from "./pages/Evidence";
+import FineTune from "./pages/FineTune";
 import Returns from "./pages/Returns";
 import Rulebook from "./pages/Rulebook";
 
@@ -24,6 +26,7 @@ const NAV = [
   { to: "/evidence", label: "Evidence", icon: Camera },
   { to: "/map", label: "Map", icon: Map },
   { to: "/returns", label: "Returns", icon: FileCheck2 },
+  { to: "/finetune", label: "Fine-tune", icon: Brain },
 ];
 
 const ROLE_LABEL: Record<string, string> = {
@@ -93,6 +96,7 @@ function Shell() {
           <Route path="/map" element={<MapView />} />
           <Route path="/evidence" element={<Evidence />} />
           <Route path="/returns" element={<Returns />} />
+          <Route path="/finetune" element={<FineTune />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
