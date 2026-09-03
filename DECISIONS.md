@@ -130,3 +130,33 @@ This file tracks all key technical, architectural, and operational decisions mad
   2. The only thing E2B buys over it is multimodality, which is exactly the spoken-Hindi demo moment. The photo path does not depend on it: YOLOv8n on the backend already triages evidence images.
   3. There is **no ASR escape hatch**. Whisper, Qwen3-ASR and Parakeet are LiteRT models, not LiteRT-LM, so pairing a text LLM with on-device speech means standing up a second runtime.
 - **Decision:** Test E2B first — it preserves the differentiating voice demo at a memory cost we have reason to think fits. Hold **Qwen3-1.7B (0.91 GB, ~1.4 GB resident)** downloaded and ready as the fallback that is near-certain to load on this hardware. If the voice moment is cut for any reason, switch to **Qwen3-4B-Instruct-2507** rather than staying on E2B, since at that point E2B has no advantage left.
+
+---
+
+### ADR-011: E2B Runs on the M31s — and ADR-006's GPU Assumption Was Wrong
+- **Date:** 2026-09-03
+- **Status:** Accepted & Verified on hardware
+- **Result:** Gemma 4 E2B loads and answers on the Galaxy M31s, on the **GPU backend at full 4096 context** — the top rung of the ladder.
+
+  | | E4B (ADR-006) | E2B (measured) |
+  |---|---|---|
+  | Backend won | CPU (forced) | **GPU / 4096** |
+  | Peak resident | 4,300 MB | **2,552 MB** |
+  | Free at peak | 119 MB → froze | **3,138 MB** |
+  | Load time | never completed | ~100 s incl. first extraction |
+
+- **Correction to ADR-006:** it recorded the Exynos 9611 / Mali-G72 as having "no OpenCL userland driver" and predicted a forced CPU path at ~3.2 GB. That was wrong. LiteRT-LM took the GPU rung on the first attempt, which is *why* the footprint is 2.55 GB rather than the ~3.2 GB predicted for CPU. The E4B failure was therefore about model size alone, not about a missing GPU.
+- **Consequence:** there is 1.75 GB of headroom against the ceiling that killed E4B. E2B is comfortable on this device, not marginal.
+
+---
+
+### ADR-012: Ledger Answers Must Have Citations Verified, Not Requested
+- **Date:** 2026-09-03
+- **Status:** Accepted & Implemented
+- **Context:** Asked "What is overdue and who owns it?" twice, E2B answered correctly once and then wrote **"Mines Rules 1555 · Form B"** — one digit off a real statute. Both answers carried the UI caption "grounded in the live ledger".
+- **Root cause — not simple hallucination.** `askLedger` passed only `clause_ref` ("R. 29-P") in the ledger table, never the act. A compliance answer wants the full reference, so the model supplied the statute name **from memory**, which is exactly what `CLAUDE.md` warns against: *"A 4B model recalling statute from memory invents regulation numbers."* It was not disobeying the instruction; it was never given the act to copy.
+- **Decision:**
+  1. `LedgerFact` now carries `act`, and the prompt table renders `[act - clause_ref]` with an instruction to copy the bracketed reference verbatim. The model no longer has to recall anything.
+  2. `unverifiedCitations()` checks every statute-shaped phrase in the answer against the acts actually supplied. This is deterministic code, per the project's own rule that the model does language work and deterministic code does safety-critical work — and a statutory citation in a compliance record is safety-critical.
+  3. The caption now tells the truth: **"grounded - every citation verified"** only when the check passes, otherwise **"citation could NOT be verified against the ledger"** with the offending reference named in the answer body.
+- **Consequence:** the Rulebook screen already rejected fabricated clause refs on the extraction path; the Q&A path had no such check and now has one. A wrong statute number can still be generated, but it can no longer be presented as grounded.

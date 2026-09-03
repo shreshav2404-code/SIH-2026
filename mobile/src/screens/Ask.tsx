@@ -90,7 +90,16 @@ export default function Ask({ lastPhotoUri }: { lastPhotoUri?: string | null }) 
     setTimeout(() => scroller.current?.scrollToEnd({ animated: true }), 60);
   }
 
-  async function run(label: string, work: () => Promise<string>, note?: string) {
+  /**
+   * `work` may return a bare string, or a string plus its own note when the
+   * caption depends on the result - a ledger answer only earns "grounded" if
+   * its citations actually check out.
+   */
+  async function run(
+    label: string,
+    work: () => Promise<string | { text: string; note?: string }>,
+    note?: string,
+  ) {
     if (state.kind !== "ready") {
       await warm();
       if (!llmModule?.isLoaded()) return;
@@ -98,7 +107,10 @@ export default function Ask({ lastPhotoUri }: { lastPhotoUri?: string | null }) 
     push({ role: "you", text: label });
     setBusy(true);
     try {
-      push({ role: "model", text: (await work()).trim(), note });
+      const result = await work();
+      const body = typeof result === "string" ? result : result.text;
+      const caption = typeof result === "string" ? note : (result.note ?? note);
+      push({ role: "model", text: body.trim(), note: caption });
     } catch (e) {
       push({
         role: "model",
@@ -119,15 +131,34 @@ export default function Ask({ lastPhotoUri }: { lastPhotoUri?: string | null }) 
         const { items } = await fetchDuties();
         const facts: LedgerFact[] = items.slice(0, 25).map((d) => ({
           title: d.title,
+          act: d.act,
           clause_ref: d.clause_ref,
           owner_role: d.owner_role,
           status: d.status,
           due_date: d.due_date,
           evidence_count: d.evidence_count,
         }));
-        return (await getLlm()).askLedger(question, facts);
+        const { answer, unverified } = await (await getLlm()).askLedger(
+          question,
+          facts,
+        );
+
+        // Never label an answer "grounded" without checking it. The model
+        // wrote "Mines Rules 1555" once on this very question - one digit off
+        // a real statute, under a caption claiming it came from the ledger.
+        // Say what is actually true instead.
+        if (unverified.length) {
+          return {
+            text:
+              answer +
+              "\n\nNOT IN THIS LEDGER: " +
+              unverified.join(", ") +
+              ". Treat that citation as unverified.",
+            note: "citation could NOT be verified against the ledger",
+          };
+        }
+        return { text: answer, note: "grounded - every citation verified" };
       },
-      "grounded in the live ledger",
     );
   }
 

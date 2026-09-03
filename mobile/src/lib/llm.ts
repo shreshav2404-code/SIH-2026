@@ -444,6 +444,16 @@ In under 40 words: what is happening, why it matters, and what the duty requires
 
 export interface LedgerFact {
   title: string;
+  /**
+   * The statute the clause belongs to, e.g. "Mines Rules 1955".
+   *
+   * This used to be omitted, which is how a wrong citation got on screen. The
+   * ledger gave the model only "R. 29-P", but a compliance answer wants the
+   * whole reference, so the model supplied the statute name FROM MEMORY - and
+   * on one run wrote "Mines Rules 1555". It was not disobeying the instruction
+   * not to invent regulation numbers; it was never given the number to copy.
+   */
+  act: string;
   clause_ref: string;
   owner_role: string;
   status: string;
@@ -459,21 +469,61 @@ export interface LedgerFact {
  * box would invite questions it answers from memory - which for statute means
  * inventing regulation numbers.
  */
+/** A ledger answer plus whatever could not be verified against the ledger. */
+export interface LedgerAnswer {
+  answer: string;
+  /**
+   * Statute names the model wrote that were NOT in the facts it was given.
+   * Non-empty means the answer must not be presented as grounded.
+   */
+  unverified: string[];
+}
+
+/**
+ * Anything shaped like a statute: capitalised words followed by a four-digit
+ * year. Matches "Mines Act 1952" and "Mines Rules 1955" - and "Mines Rules
+ * 1555", which is the point.
+ */
+const STATUTE_RE = /((?:[A-Z][A-Za-z.]*\s+){1,4}\d{4})/g;
+
+/**
+ * Check the model's citations against the ledger it was handed.
+ *
+ * The prompt already asks it to copy references rather than recall them. That
+ * is necessary and not sufficient: asked the same question twice, E2B wrote
+ * "Mines Rules 1955" once and "Mines Rules 1555" the next time, both under a
+ * UI label reading "grounded in the live ledger". One digit turns a real
+ * statute into one that does not exist.
+ *
+ * This project's rule is that the model does language work and deterministic
+ * code does safety-critical work. A statutory citation in a compliance record
+ * is safety-critical, so it is verified here rather than requested politely.
+ */
+export function unverifiedCitations(answer: string, facts: LedgerFact[]): string[] {
+  const allowed = new Set(facts.map((f) => f.act.toLowerCase().trim()));
+  const bad = new Set<string>();
+  for (const m of answer.matchAll(STATUTE_RE)) {
+    const cited = m[1].trim();
+    if (!allowed.has(cited.toLowerCase())) bad.add(cited);
+  }
+  return [...bad];
+}
+
 export async function askLedger(
   question: string,
   facts: LedgerFact[],
-): Promise<string> {
+): Promise<LedgerAnswer> {
   const model = await loadModel();
 
   const table = facts
     .map(
       (f) =>
-        `- ${f.title} [${f.clause_ref}] owner=${f.owner_role} status=${f.status}` +
+        `- ${f.title} [${f.act} - ${f.clause_ref}] owner=${f.owner_role} status=${f.status}` +
         ` due=${f.due_date ?? "n/a"} evidence=${f.evidence_count}`,
     )
     .join("\n");
 
-  return model.execute(
+  const answer = await model.execute(
     text(`You answer questions about a coal mine's statutory compliance ledger.
 
 LEDGER (the only facts you may use):
@@ -481,10 +531,13 @@ ${table}
 
 QUESTION: ${question}
 
-Answer in under 60 words, plainly. Cite the clause reference for every duty you
-mention. If the ledger above does not contain the answer, say so - do not use
-outside knowledge, and never state a regulation number that is not listed.`),
+Answer in under 60 words, plainly. Cite every duty you mention EXACTLY as it
+appears in brackets above - copy it, do not rewrite it. If the ledger above
+does not contain the answer, say so. Do not use outside knowledge, and never
+state a statute or regulation number that is not listed above.`),
     undefined,
     { maxOutputTokens: MAX_TOKENS },
   );
+
+  return { answer, unverified: unverifiedCitations(answer, facts) };
 }
