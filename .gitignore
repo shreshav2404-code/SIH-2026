@@ -40,10 +40,11 @@ mobile/ios/
 Thumbs.db
 desktop.ini
 
-# local dev server logs
-.dev-*.log
-gradle-build.log
-sdk-*.log
-ndk-install.log
-x86-image.log
-*.png
+# local dev logs and throwaway test screenshots, all at the repo root.
+# Scoped with a leading slash so docs/ keeps its wireframes.
+/.dev-*.log
+/gradle-build.log
+/sdk-*.log
+/ndk-install.log
+/x86-image.log
+/*.png
