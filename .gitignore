@@ -49,3 +49,10 @@ desktop.ini
 /x86-image.log
 /*.png
 models-archive/
+
+# Scratch from device debugging. These were committed by accident via
+# `git add -A` and are pure noise: adb screenshots and uiautomator dumps.
+# Screenshots of a running app belong in docs/, named, or nowhere.
+/*.png
+/*.xml
+/*.log
