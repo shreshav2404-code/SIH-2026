@@ -225,6 +225,19 @@ export function loadModel(
   return loading;
 }
 
+/**
+ * The model that is loaded right now, loading the default only if none is.
+ *
+ * Every task below must use THIS rather than loadModel(), which defaults to
+ * Qwen: with E2B deliberately loaded for a photo, loadModel() would be asked
+ * for a different model and correctly refuse, so describePhoto() would fail
+ * with "call switchModel()" while the right model sat loaded and ready.
+ */
+async function activeModel(): Promise<LiteRTLMInstance> {
+  if (llm) return llm;
+  return loadModel();
+}
+
 export function isLoaded() {
   return llm !== null;
 }
@@ -389,7 +402,7 @@ export async function extractDuties(
   circular: string,
   clauses: RetrievedClause[],
 ): Promise<{ duties: ExtractedDuty[]; source: "model" | "fallback" }> {
-  const model = await loadModel();
+  const model = await activeModel();
   const prompt = extractionPrompt(circular, clauses);
   const allowed = new Set(clauses.map((c) => c.clause_ref));
 
@@ -427,7 +440,7 @@ export async function observationFromAudio(
   audioPath: string,
   clause: RetrievedClause | null,
 ): Promise<string> {
-  const model = await loadModel();
+  const model = await activeModel();
   const grounding = clause
     ? `Governing clause [${clause.clause_ref}]: ${clause.text}\n\n`
     : "";
@@ -452,7 +465,7 @@ export async function draftObservation(
   spoken: string,
   clause: RetrievedClause | null,
 ): Promise<string> {
-  const model = await loadModel();
+  const model = await activeModel();
   const grounding = clause
     ? `Governing clause [${clause.clause_ref}]: ${clause.text}\n\n`
     : "";
@@ -473,7 +486,7 @@ export async function describePhoto(
   photoPath: string,
   question: string,
 ): Promise<string> {
-  const model = await loadModel();
+  const model = await activeModel();
   return model.execute(
     [
       { type: "image", path: photoPath },
@@ -494,7 +507,7 @@ export async function explainWindow(
   stats: { mean: number; max: number; threshold: number; z_max: number },
   clause: RetrievedClause | null,
 ): Promise<string> {
-  const model = await loadModel();
+  const model = await activeModel();
   const grounding = clause
     ? `Governing clause [${clause.clause_ref}]: ${clause.text}\n\n`
     : "";
@@ -597,7 +610,7 @@ export async function askLedger(
    */
   onToken?: TokenCallback,
 ): Promise<LedgerAnswer> {
-  const model = await loadModel();
+  const model = await activeModel();
 
   // A trimmed list must never be presented as the whole ledger. Ask.tsx sends
   // the most relevant duties only, so the model is told what it is NOT seeing.

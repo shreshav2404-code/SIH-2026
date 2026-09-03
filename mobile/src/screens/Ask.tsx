@@ -1,7 +1,14 @@
+import { CameraView, useCameraPermissions } from "expo-camera";
+import {
+  AudioModule,
+  RecordingPresets,
+  useAudioRecorder,
+} from "expo-audio";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   ScrollView,
   StyleSheet,
@@ -133,6 +140,15 @@ export default function Ask({ lastPhotoUri }: { lastPhotoUri?: string | null }) 
   const [activeId, setActiveId] = useState<ModelId>(DEFAULT_MODEL_ID);
   const scroller = useRef<ScrollView>(null);
   const insets = useSafeAreaInsets();
+
+  /** Voice capture. The audio goes straight into the model; it never uploads. */
+  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const [recording, setRecording] = useState(false);
+
+  /** Camera capture, for asking the model about something in front of you. */
+  const [camOpen, setCamOpen] = useState(false);
+  const [camPerm, requestCamPerm] = useCameraPermissions();
+  const camera = useRef<CameraView>(null);
 
   const spec = modelById(activeId);
   const found = locateModel(spec);
@@ -270,6 +286,85 @@ export default function Ask({ lastPhotoUri }: { lastPhotoUri?: string | null }) 
         return { text: answer, note: "grounded - every citation verified" };
       },
     );
+  }
+
+  /**
+   * Record the officer speaking, then hand the audio to the model.
+   *
+   * The recording never leaves the phone: expo-audio writes it to app storage
+   * and the file path goes straight into E2B, which takes audio natively. That
+   * is the whole reason this app needs no speech-to-text service and works in
+   * airplane mode.
+   */
+  async function toggleVoice() {
+    if (recording) {
+      setRecording(false);
+      try {
+        await recorder.stop();
+      } catch {
+        /* nothing was recording */
+      }
+      const uri = recorder.uri;
+      if (!uri) return;
+      if (!(await ensureMultimodal())) return;
+      await run(
+        "Draft an observation from what I just said",
+        async () => (await getLlm()).observationFromAudio(uri, null),
+        "spoken on this device - audio never left the phone",
+      );
+      return;
+    }
+
+    const perm = await AudioModule.requestRecordingPermissionsAsync();
+    if (!perm.granted) {
+      push({
+        role: "model",
+        text: "Microphone permission was refused, so I cannot record.",
+      });
+      return;
+    }
+    try {
+      await recorder.prepareToRecordAsync(RecordingPresets.HIGH_QUALITY);
+      recorder.record();
+      setRecording(true);
+    } catch (e) {
+      push({
+        role: "model",
+        text: `Could not start recording: ${e instanceof Error ? e.message : e}`,
+      });
+    }
+  }
+
+  /** Take a photo and ask the model about it. */
+  async function openCamera() {
+    if (!camPerm?.granted) {
+      const r = await requestCamPerm();
+      if (!r.granted) {
+        push({ role: "model", text: "Camera permission was refused." });
+        return;
+      }
+    }
+    setCamOpen(true);
+  }
+
+  async function shoot() {
+    try {
+      const shot = await camera.current?.takePictureAsync({ quality: 0.6 });
+      setCamOpen(false);
+      if (!shot?.uri) return;
+      if (!(await ensureMultimodal())) return;
+      await run(
+        "What does this show?",
+        async () => (await getLlm()).describePhoto(shot.uri, "What is wrong here?"),
+        "image read on this device",
+      );
+    } catch (e) {
+      setCamOpen(false);
+      push({
+        role: "model",
+        text: `Could not take the photo: ${e instanceof Error ? e.message : e}`,
+      });
+    }
   }
 
   // ---------------------------------------------------------------- render
@@ -491,6 +586,20 @@ export default function Ask({ lastPhotoUri }: { lastPhotoUri?: string | null }) 
       </View>
 
       <View style={s.composer}>
+        {/* Speak, or show the model something. Both need the multimodal model
+            and will offer to switch to it rather than fail. */}
+        <TouchableOpacity
+          style={[s.iconBtn, recording && s.iconBtnRec]}
+          onPress={toggleVoice}
+          disabled={busy}
+        >
+          <Text style={[s.iconText, recording && s.iconTextRec]}>
+            {recording ? "STOP" : "MIC"}
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={s.iconBtn} onPress={openCamera} disabled={busy}>
+          <Text style={s.iconText}>CAM</Text>
+        </TouchableOpacity>
         <TextInput
           style={s.input}
           value={input}
@@ -508,6 +617,20 @@ export default function Ask({ lastPhotoUri }: { lastPhotoUri?: string | null }) 
           <Text style={s.sendText}>Ask</Text>
         </TouchableOpacity>
       </View>
+
+      <Modal visible={camOpen} animationType="slide" onRequestClose={() => setCamOpen(false)}>
+        <View style={s.camWrap}>
+          <CameraView ref={camera} style={s.cam} facing="back" />
+          <View style={[s.camBar, { paddingBottom: insets.bottom + 12 }]}>
+            <TouchableOpacity style={s.camCancel} onPress={() => setCamOpen(false)}>
+              <Text style={s.camCancelText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={s.shutter} onPress={shoot}>
+              <Text style={s.shutterText}>Ask about this</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -569,6 +692,29 @@ const s = StyleSheet.create({
   switchBtnOn: { backgroundColor: C.accent, borderColor: C.accent },
   switchText: { fontSize: 11, color: C.inkSoft },
   switchTextOn: { color: "#fff", fontWeight: "700" },
+
+  // ---- voice / camera ----
+  iconBtn: {
+    paddingHorizontal: 10, paddingVertical: 10, borderRadius: 6,
+    borderWidth: 1, borderColor: C.line, backgroundColor: C.panel,
+    justifyContent: "center",
+  },
+  iconBtnRec: { backgroundColor: C.crit, borderColor: C.crit },
+  iconText: { fontSize: 10, fontWeight: "700", color: C.inkSoft, letterSpacing: 0.5 },
+  iconTextRec: { color: "#fff" },
+  camWrap: { flex: 1, backgroundColor: "#000" },
+  cam: { flex: 1 },
+  camBar: {
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    paddingHorizontal: 20, paddingTop: 12, backgroundColor: "#000",
+  },
+  camCancel: { paddingVertical: 12, paddingHorizontal: 16 },
+  camCancelText: { color: "#fff", fontSize: 14 },
+  shutter: {
+    backgroundColor: C.accent, paddingVertical: 14, paddingHorizontal: 22,
+    borderRadius: 8,
+  },
+  shutterText: { color: "#fff", fontWeight: "700", fontSize: 14 },
   gate: { padding: 20, paddingBottom: 40 },
   gateTitle: { fontSize: 20, fontWeight: "700", color: C.ink },
   gateBody: { marginTop: 6, fontSize: 13, lineHeight: 19, color: C.inkSoft },
