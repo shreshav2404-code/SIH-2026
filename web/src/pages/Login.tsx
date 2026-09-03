@@ -6,15 +6,17 @@ import { API_BASE } from "../api/client";
 import { useAuth } from "../lib/auth";
 
 const DEMO = [
-  { username: "manager.gevra", label: "P. Kujur", role: "Mine Manager" },
-  { username: "safety.gevra", label: "R. Minz", role: "Safety Officer" },
-  { username: "regulator.dgms", label: "DGMS", role: "Regulator" },
+  { username: "keshav", label: "Keshav Jha", role: "Admin · Mine Manager" },
+  { username: "prince", label: "Prince", role: "Safety Officer" },
+  { username: "rana", label: "Rana", role: "Mine Manager · Jhanjra" },
+  { username: "khadir", label: "Khadir", role: "Safety Officer · Jhanjra" },
+  { username: "nisarga", label: "Nisarga", role: "Regulator · all mines" },
 ];
 
 export default function Login() {
   const { login } = useAuth();
   const nav = useNavigate();
-  const [username, setUsername] = useState("manager.gevra");
+  const [username, setUsername] = useState("keshav");
   const [password, setPassword] = useState("demo1234");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);

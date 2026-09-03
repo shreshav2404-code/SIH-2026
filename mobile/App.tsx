@@ -181,7 +181,7 @@ export default function App() {
 }
 
 function Login({ onSignedIn }: { onSignedIn: (u: User) => void }) {
-  const [username, setUsername] = useState("manager.gevra");
+  const [username, setUsername] = useState("keshav");
   const [password, setPassword] = useState("demo1234");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);

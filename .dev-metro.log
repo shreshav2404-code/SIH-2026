@@ -1,0 +1,8 @@
+The /android project does not contain any URI schemes. Expo CLI will not be able to use links to launch the project. You can configure a custom URI scheme using the --scheme option.
+Starting project at D:\anupalan\mobile
+Logs: D:\anupalan\mobile\.expo\dev\logs\start.log
+Starting Metro Bundler
+
+Waiting on http://localhost:8081
+
+Logs for your project will appear below.
