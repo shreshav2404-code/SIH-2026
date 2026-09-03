@@ -14,7 +14,21 @@
 export const EMULATOR_HOST = "http://10.0.2.2:8000";
 export const LAN_HOST = "http://192.168.1.36:8000";
 
-export const API_BASE = EMULATOR_HOST;
+/**
+ * Reached over the USB cable via `adb reverse tcp:8000 tcp:8000`, which makes
+ * localhost:8000 ON THE DEVICE resolve to the laptop. Works identically on a
+ * phone and on the emulator, and sidesteps wifi, LAN addressing and the
+ * firewall entirely - which is exactly what you want at a venue.
+ *
+ * Run once per device after connecting:
+ *   adb reverse tcp:8000 tcp:8000
+ *   adb reverse tcp:8081 tcp:8081   # Metro, debug builds only
+ *
+ * Switch to LAN_HOST for a release APK running without a cable.
+ */
+export const USB_HOST = "http://localhost:8000";
+
+export const API_BASE = USB_HOST;
 
 /** Cap on queued captures held before we warn the officer. */
 export const QUEUE_WARN_AT = 25;
