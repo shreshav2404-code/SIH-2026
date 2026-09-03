@@ -60,6 +60,58 @@ let running = false;
 /** Latest values, for the app to show without waiting for a round trip. */
 export let live = { vibration: 0, illumination: 0, noise: 0 };
 
+/**
+ * Whether each sensor physically exists on THIS handset.
+ *
+ * Phones differ: every Android device has an accelerometer, most mid-range
+ * ones have an ambient light sensor, and a few have neither exposed to apps.
+ * The app must read what is there and say plainly what is not, rather than
+ * showing a permanent zero that looks like a real measurement of silence.
+ *
+ * null means "not probed yet", false means "this phone does not have it".
+ */
+export interface Availability {
+  vibration: boolean | null;
+  illumination: boolean | null;
+  noise: boolean | null;
+}
+
+export let available: Availability = {
+  vibration: null,
+  illumination: null,
+  noise: null,
+};
+
+/**
+ * Ask the hardware what it actually has. Cheap, and worth doing before the UI
+ * renders so nothing shows a value it cannot produce.
+ *
+ * The microphone is reported separately by the screen, because "absent" and
+ * "permission refused" are different problems with different fixes.
+ */
+export async function probeSensors(): Promise<Availability> {
+  const check = async (probe: () => Promise<boolean>) => {
+    try {
+      return await probe();
+    } catch {
+      // A sensor class that throws on this platform counts as absent.
+      return false;
+    }
+  };
+
+  available = {
+    vibration: await check(() => Accelerometer.isAvailableAsync()),
+    illumination: await check(() => LightSensor.isAvailableAsync()),
+    noise: available.noise, // decided by the recorder, set via setNoiseAvailable
+  };
+  return available;
+}
+
+/** The screen owns the microphone, so it reports back whether one exists. */
+export function setNoiseAvailable(ok: boolean) {
+  available = { ...available, noise: ok };
+}
+
 function rms(xs: number[]): number {
   if (!xs.length) return 0;
   return Math.sqrt(xs.reduce((a, x) => a + x * x, 0) / xs.length);
@@ -102,22 +154,33 @@ export function startSensors(mineId: number, onError?: (e: unknown) => void) {
   running = true;
   win = { accel: [], lux: [], db: [] };
 
-  Accelerometer.setUpdateInterval(SAMPLE_MS);
-  subs.push(
-    Accelerometer.addListener(({ x, y, z }) => {
-      // Remove the constant 1g so a phone lying still reads ~0 rather than 1.
-      const magnitude = Math.sqrt(x * x + y * y + z * z);
-      win.accel.push(Math.abs(magnitude - 1));
-    }),
-  );
+  // Subscribe only to hardware this phone actually has. A listener on an
+  // absent sensor never fires, which would look identical to a real reading of
+  // zero - worse than saying nothing.
+  if (available.vibration !== false) {
+    try {
+      Accelerometer.setUpdateInterval(SAMPLE_MS);
+      subs.push(
+        Accelerometer.addListener(({ x, y, z }) => {
+          // Remove the constant 1g so a phone lying still reads ~0, not 1.
+          const magnitude = Math.sqrt(x * x + y * y + z * z);
+          win.accel.push(Math.abs(magnitude - 1));
+        }),
+      );
+    } catch {
+      available = { ...available, vibration: false };
+    }
+  }
 
-  // Android-only, and absent on some devices. Missing hardware must not take
-  // the other sensors down with it.
-  try {
-    LightSensor.setUpdateInterval(SAMPLE_MS);
-    subs.push(LightSensor.addListener(({ illuminance }) => win.lux.push(illuminance)));
-  } catch {
-    /* no ambient light sensor on this device */
+  if (available.illumination !== false) {
+    try {
+      LightSensor.setUpdateInterval(SAMPLE_MS);
+      subs.push(
+        LightSensor.addListener(({ illuminance }) => win.lux.push(illuminance)),
+      );
+    } catch {
+      available = { ...available, illumination: false };
+    }
   }
 
   poster = setInterval(() => {

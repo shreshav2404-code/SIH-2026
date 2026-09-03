@@ -36,10 +36,12 @@ import { counts } from "./src/lib/db";
 import Ask from "./src/screens/Ask";
 import Capture from "./src/screens/Capture";
 import Duties from "./src/screens/Duties";
+import { TabBoundary } from "./src/components/TabBoundary";
+import Sensors from "./src/screens/Sensors";
 import Sync from "./src/screens/Sync";
 import { C } from "./src/theme";
 
-type Tab = "duties" | "capture" | "ask" | "sync";
+type Tab = "duties" | "capture" | "ask" | "sensors" | "sync";
 
 function AppInner() {
   const insets = useSafeAreaInsets();
@@ -167,12 +169,24 @@ function AppInner() {
               <Text style={s.dim}>Pick a duty from the list to capture it.</Text>
             </View>
           ))}
-        {tab === "ask" && <Ask />}
+        {/* These two depend on native modules (LiteRT-LM, expo-sensors,
+            expo-audio). If the installed binary predates one, the boundary
+            explains it in that tab instead of the app refusing to open. */}
+        {tab === "ask" && (
+          <TabBoundary name="The assistant">
+            <Ask />
+          </TabBoundary>
+        )}
+        {tab === "sensors" && (
+          <TabBoundary name="Handset telemetry">
+            <Sensors mineId={user.mine_id ?? 1} />
+          </TabBoundary>
+        )}
         {tab === "sync" && <Sync online={online} />}
       </View>
 
       <View style={[s.tabs, { paddingBottom: insets.bottom }]}>
-        {(["duties", "capture", "ask", "sync"] as Tab[]).map((t) => (
+        {(["duties", "capture", "ask", "sensors", "sync"] as Tab[]).map((t) => (
           <TouchableOpacity key={t} style={s.tab} onPress={() => setTab(t)}>
             <Text style={[s.tabText, tab === t && s.tabActive]}>
               {t.toUpperCase()}
