@@ -66,6 +66,36 @@ const DUTY_SCHEMA = JSON.stringify({
   required: ["duties"],
 });
 
+/**
+ * Load attempts in order of preference; each rung costs less memory than the
+ * one above it.
+ *
+ * The order matters, and the shape of it more so. GPU comes first because it
+ * is roughly five times lighter than CPU (710 MB against 3.3 GB) as well as
+ * faster. But a phone whose chipset exposes no OpenCL - the Exynos 9611 in a
+ * Galaxy M31s, and every Tensor-based Pixel - fails the GPU rungs for a reason
+ * that has nothing to do with memory, and still needs somewhere to land.
+ *
+ * The previous version branched once: memory error meant a smaller GPU
+ * context, anything else meant CPU at full context, and if THAT was refused
+ * there was no rung left. That is exactly how this phone failed - it fell
+ * straight to cpu/4096, was refused for being ~62 MB short, and stopped.
+ *
+ * Context length is the cheapest thing to give up. 1024 tokens still holds a
+ * retrieved clause and a question, which is all any prompt in this app sends.
+ */
+const LOAD_LADDER = [
+  { backend: "gpu", maxContextTokens: 4096 },
+  { backend: "gpu", maxContextTokens: 2048 },
+  { backend: "gpu", maxContextTokens: 1024 },
+  { backend: "cpu", maxContextTokens: 4096 },
+  { backend: "cpu", maxContextTokens: 2048 },
+  { backend: "cpu", maxContextTokens: 1024 },
+] as const;
+
+/** Which rung actually loaded, once one has. Null until then. */
+export let loadedConfig: (typeof LOAD_LADDER)[number] | null = null;
+
 let llm: LiteRTLMInstance | null = null;
 let loading: Promise<LiteRTLMInstance> | null = null;
 
@@ -79,8 +109,9 @@ function text(s: string): MultimodalPart[] {
  * Warm the model behind a splash screen. Mapping 3.66 GB takes a few seconds
  * on first open â€” never do this in front of a judge.
  *
- * Requests GPU (710 MB / ~22 tok/s on the S24+'s Adreno) and falls back to CPU
- * (3.3 GB / ~18 tok/s), which is the guaranteed floor on any 8 GB phone.
+ * Walks LOAD_LADDER from GPU/4096 down to CPU/1024 and keeps the first rung
+ * that loads, which one is recorded in `loadedConfig`. Do not assume the top
+ * rung: a phone with no OpenCL never gets a GPU rung at all.
  * Never pass `suppressTokens` â€” it aborts the process on litertlm-android
  * 0.15/0.16.
  */
@@ -105,28 +136,44 @@ export function loadModel(
 
     const instance = createLLM({ enableMemoryTracking: true });
 
-    try {
-      await instance.loadModel(
-        MODEL_PATH,
-        { backend: "gpu", maxContextTokens: 4096, enableStructuredOutput: true, temperature: TEMPERATURE },
-        onProgress,
-      );
-    } catch (err) {
-      // A memory rejection is not a GPU problem â€” retry smaller, not on CPU.
-      if (isMemoryError(err)) {
+    // Walk the ladder until a rung loads. Each attempt is recorded so the UI
+    // can say which one won - "CPU / 1024" is a materially different demo from
+    // "GPU / 4096" and the operator should be able to see which they have.
+    let lastErr: unknown = null;
+    let won: (typeof LOAD_LADDER)[number] | null = null;
+
+    for (const rung of LOAD_LADDER) {
+      try {
         await instance.loadModel(
           MODEL_PATH,
-          { backend: "gpu", maxContextTokens: 2048, enableStructuredOutput: true, temperature: TEMPERATURE },
+          {
+            backend: rung.backend,
+            maxContextTokens: rung.maxContextTokens,
+            enableStructuredOutput: true,
+            temperature: TEMPERATURE,
+          },
           onProgress,
         );
-      } else {
-        await instance.loadModel(
-          MODEL_PATH,
-          { backend: "cpu", maxContextTokens: 4096, enableStructuredOutput: true, temperature: TEMPERATURE },
-          onProgress,
-        );
+        won = rung;
+        break;
+      } catch (err) {
+        lastErr = err;
       }
     }
+
+    if (!won) {
+      // Report the last failure verbatim - the engine's own message names the
+      // shortfall in MB, which is the number worth acting on.
+      const detail = lastErr instanceof Error ? lastErr.message : String(lastErr);
+      throw new Error(
+        isMemoryError(lastErr)
+          ? "Not enough free memory for Gemma 4 E4B, even at the smallest " +
+            "context setting. Close other apps and try again.\n\n" + detail
+          : detail,
+      );
+    }
+
+    loadedConfig = won;
 
     llm = instance;
     return instance;

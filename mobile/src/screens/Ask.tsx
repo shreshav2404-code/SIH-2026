@@ -204,9 +204,11 @@ export default function Ask({ lastPhotoUri }: { lastPhotoUri?: string | null }) 
           ON-DEVICE ·{" "}
           {llmModule?.modelLocation
             ? describeOrigin(llmModule.modelLocation.origin)
-            : "loaded"}{" "}
-          · no
-          network used
+            : "loaded"}
+          {llmModule?.loadedConfig
+            ? ` · ${llmModule.loadedConfig.backend.toUpperCase()} / ${llmModule.loadedConfig.maxContextTokens}`
+            : ""}{" "}
+          · no network used
         </Text>
       </View>
 

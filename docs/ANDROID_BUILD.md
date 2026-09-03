@@ -158,3 +158,50 @@ with no code changes.
 2. Add the three `org.gradle.java.*` lines to `gradle.properties`
 3. Set Gradle JDK to 21 in Android Studio
 4. Sync, then **Build → Make Project**
+
+---
+
+## 6. A release APK cannot reach the API — cleartext HTTP is blocked
+
+**Symptom.** The release build installs and runs, but every request fails and
+the app shows
+
+```
+Cannot reach the API at http://localhost:8000. Check the connection.
+```
+
+while `adb reverse --list` shows the tunnel up and `curl http://127.0.0.1:8000/health`
+on the laptop returns `{"status":"ok"}`. Nothing appears in logcat — a release
+build strips the JS console, so the failure is silent.
+
+**Cause.** `expo prebuild` writes `android:usesCleartextTraffic="true"` into
+`android/app/src/debug/AndroidManifest.xml` — the **debug** source set only.
+The main manifest gets no such attribute, and from targetSdk 28 Android's
+default is to refuse all cleartext HTTP. So the debug APK talks to the laptop
+happily and the release APK cannot, which reads like a network fault and is
+not one.
+
+Confirm it against a built APK rather than guessing:
+
+```bash
+D:/Android/Sdk/build-tools/36.0.0/aapt2.exe dump xmltree \
+  --file AndroidManifest.xml app-release.apk | grep -i cleartext
+```
+
+No output means HTTP is blocked.
+
+**Fix.** In `android/app/src/main/AndroidManifest.xml`, on `<application>`:
+
+```xml
+<application android:usesCleartextTraffic="true" android:name=".MainApplication" ...>
+```
+
+A scoped `network-security-config` would be tighter, but it cannot express a
+CIDR range and the laptop's IP is not known until we are on the venue wifi.
+Production would terminate TLS. Nothing here carries anything but demo data,
+and **the model is unaffected either way** — it runs on the handset and never
+touches the network.
+
+> Do not reach for `npm install expo-build-properties` to make this survive
+> `expo prebuild`. Installing anything rewrites `node_modules` and erases the
+> `react-native-litert-lm` patches in sections 4 and 5. Re-apply this by hand.

@@ -160,6 +160,9 @@ breaks nothing that matters.
 
 ## Quick checklist
 
+- [ ] `android:usesCleartextTraffic="true"` on `<application>` in
+      `android/app/src/main/AndroidManifest.xml` — **without this the release
+      APK cannot reach the API at all**, see `ANDROID_BUILD.md` §6
 - [ ] `bundleModel=true` in `android/gradle.properties`
 - [ ] copy task + `noCompress` in `android/app/build.gradle`
 - [ ] `models/gemma-4-E4B-it.litertlm` present, 3,659,530,240 bytes
