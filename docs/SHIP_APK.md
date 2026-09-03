@@ -33,40 +33,60 @@ bundleModel=true
 
 ```gradle
 def bundleModel = (findProperty('bundleModel') ?: 'false').toBoolean()
-def modelSource = file("${projectRoot}/../models/gemma-4-E4B-it.litertlm")
-def modelAssetDir = file("${projectDir}/src/main/assets")
+def modelDir = file("${projectRoot}/../models")
 
-if (bundleModel) {
-    if (!modelSource.exists()) {
-        throw new GradleException("bundleModel=true but the model is missing at ${modelSource}")
-    }
-    tasks.register('copyModelToAssets', Copy) {
-        from modelSource
-        into modelAssetDir
-    }
-    // RELEASE ONLY — a debug build must stay fast.
-    tasks.configureEach { task ->
-        if (task.name ==~ /merge.*Release.*Assets/ || task.name ==~ /generate.*Release.*Assets/) {
-            task.dependsOn 'copyModelToAssets'
-        }
-    }
+if (bundleModel && !file("${modelDir}/gemma-4-E4B-it.litertlm").exists()) {
+    throw new GradleException("bundleModel=true but no model at ${modelDir}")
 }
 
 android {
+    // RELEASE source set only. src/main would package the model into debug
+    // builds too and make every emulator iteration 3.9 GB.
+    sourceSets {
+        release {
+            if (bundleModel) {
+                assets.srcDirs += modelDir
+            }
+        }
+    }
     androidResources {
-        // Must not be compressed: LiteRT-LM memory-maps the file, and a
-        // deflated asset cannot be mapped. The weights are already quantised,
-        // so compressing them costs minutes and saves nothing.
+        // Must NOT be compressed: LiteRT-LM memory-maps the model, and a
+        // deflated asset cannot be mapped. Verified in the built APK - the
+        // entry must read STORED, not DEFLATED.
         noCompress += ['litertlm', 'task']
     }
 }
 ```
+
+**Do not use a `Copy` task for this.** It was the obvious approach and it is
+wrong twice over: it duplicates 3.66 GB on disk, and it writes into a directory
+that the lint, merge and package tasks all read, which Gradle rejects —
+
+```
+Task ':app:lintVitalAnalyzeRelease' uses this output of task
+':app:copyModelToAssets' without declaring an explicit dependency
+```
+
+Registering the directory as an asset source lets Gradle wire the dependencies
+itself.
 
 **Signing** needs nothing: Expo already points the release build at
 `debug.keystore`. That is fine for sideloading. It is *not* fine for the Play
 Store — generate a real keystore if you ever publish.
 
 ---
+
+## Set the Active ABI before building
+
+In **Build Variants**, each module has an **Active ABI** as well as a variant.
+If `:app` is left on `x86` the build fails in the native linker with
+
+```
+ld.lld: error: undefined symbol: margelo::nitro::JHybrid...
+```
+
+because `react-native-litert-lm` only builds `arm64-v8a`. Set **`:app` → Active
+ABI → `arm64-v8a`**, which is what any real Android phone needs anyway.
 
 ## Build it
 
