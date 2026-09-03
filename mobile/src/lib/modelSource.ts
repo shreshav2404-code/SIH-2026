@@ -19,8 +19,16 @@ import { File, Paths } from "expo-file-system";
 
 export const MODEL_FILENAME = "gemma-4-E2B-it.litertlm";
 
-/** Byte-exact size of the official file. A short file means a truncated copy. */
-export const MODEL_BYTES = 3_659_530_240;
+/**
+ * Byte-exact size of the official file — a short file means a truncated copy.
+ *
+ * This is only the FALLBACK. `expectedBytes()` prefers the bundled asset's own
+ * size, because a hand-maintained constant desynchronises the moment the model
+ * changes, and it already did: this still read 3,659,530,240 (E4B) after the
+ * switch to E2B, so every launch would have judged a perfectly good file
+ * incomplete, deleted it, and re-extracted 2.59 GB forever.
+ */
+export const MODEL_BYTES = 2_588_147_712;
 
 /**
  * Where a pushed model must live.
@@ -52,8 +60,34 @@ function extractedFile(): File {
   return new File(Paths.document, MODEL_FILENAME);
 }
 
+/**
+ * The copy inside the APK.
+ *
+ * Must be built the same way as extractedFile(): `Paths.bundle` is a Directory
+ * OBJECT, not a string. Interpolating it into a template produced the literal
+ * path "[object Object]/gemma-4-E2B-it.litertlm", which Android rejected with
+ * "Illegal character in path at index 0" and surfaced as "model not found".
+ */
+function bundledAsset(): File {
+  return new File(Paths.bundle, MODEL_FILENAME);
+}
+
+/** Prefer the bundled asset's real size over the constant. See MODEL_BYTES. */
+function expectedBytes(): number {
+  try {
+    const asset = bundledAsset();
+    if (asset.exists) {
+      const n = asset.size ?? 0;
+      if (n > 0) return n;
+    }
+  } catch {
+    // No bundled copy on this build - fall through to the constant.
+  }
+  return MODEL_BYTES;
+}
+
 function describe(path: string, origin: ModelOrigin, bytes: number): ModelLocation {
-  return { path, origin, bytes, complete: bytes === MODEL_BYTES };
+  return { path, origin, bytes, complete: bytes === expectedBytes() };
 }
 
 /**
@@ -72,7 +106,7 @@ export function locateModel(): ModelLocation {
 /**
  * Make the model available and return its path.
  *
- * If it was bundled into the APK, this copies it out on first launch — 3.66 GB,
+ * If it was bundled into the APK, this copies it out on first launch — 2.59 GB,
  * so it takes a while and MUST happen behind the splash screen, never in front
  * of a judge. Subsequent launches find it already extracted and return
  * immediately.
@@ -89,7 +123,7 @@ export async function ensureModel(
   // A partial file from an interrupted extraction would fail to load in a
   // confusing way. Delete it and start over.
   const target = extractedFile();
-  if (target.exists && (target.size ?? 0) !== MODEL_BYTES) {
+  if (target.exists && (target.size ?? 0) !== expectedBytes()) {
     try {
       target.delete();
     } catch {
@@ -97,7 +131,7 @@ export async function ensureModel(
     }
   }
 
-  const asset = new File(`${Paths.bundle}/${MODEL_FILENAME}`);
+  const asset = bundledAsset();
   if (!asset.exists) {
     return { path: null, origin: "missing", bytes: 0, complete: false };
   }
