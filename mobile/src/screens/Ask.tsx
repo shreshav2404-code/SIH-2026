@@ -138,7 +138,7 @@ export default function Ask({ lastPhotoUri }: { lastPhotoUri?: string | null }) 
       <ScrollView contentContainerStyle={s.gate}>
         <Text style={s.gateTitle}>On-device assistant</Text>
         <Text style={s.gateBody}>
-          Gemma 4 E4B runs entirely on this device. No server, no cloud, no API —
+          Gemma 4 E2B runs entirely on this device. No server, no cloud, no API —
           it answers in airplane mode.
         </Text>
 

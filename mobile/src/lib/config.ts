@@ -35,10 +35,16 @@ export const USB_HOST = "http://localhost:8000";
  * sign-in screen has a Server field, so pointing the app at a different
  * laptop or a tunnel never costs a rebuild. See loadServerUrl in api.ts.
  *
- * LAN_HOST is the default because the shipping case is a phone with no
- * cable attached. Over USB, type the USB_HOST value into that field.
+ * USB_HOST is the default, per ADR-005. This router isolates its clients, so
+ * the phone cannot reach the laptop over wifi at all no matter what the
+ * firewall says - and the demo has the phone on a cable regardless, because
+ * scrcpy mirrors it to the projector over USB. `adb reverse tcp:8000 tcp:8000`
+ * makes localhost on the phone mean the laptop, which sidesteps wifi, LAN
+ * addressing and DHCP churn in one move.
+ *
+ * For a teammate's phone with no cable, type LAN_HOST into the Server field.
  */
-export const API_BASE = LAN_HOST;
+export const API_BASE = USB_HOST;
 
 /** Cap on queued captures held before we warn the officer. */
 export const QUEUE_WARN_AT = 25;

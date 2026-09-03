@@ -1,5 +1,5 @@
 ﻿/**
- * Gemma 4 E4B, on-device, via LiteRT-LM.
+ * Gemma 4 E2B, on-device, via LiteRT-LM.
  *
  * THIS IS THE ONLY LLM IN THE SYSTEM. There is no server model, no Ollama, no
  * cloud, no API. The backend does no LLM work at all, so nothing about the
@@ -67,29 +67,24 @@ const DUTY_SCHEMA = JSON.stringify({
 });
 
 /**
- * Load attempts in order of preference; each rung costs less memory than the
- * one above it.
+ * Load attempts, in order of preference.
  *
- * The order matters, and the shape of it more so. GPU comes first because it
- * is roughly five times lighter than CPU (710 MB against 3.3 GB) as well as
- * faster. But a phone whose chipset exposes no OpenCL - the Exynos 9611 in a
- * Galaxy M31s, and every Tensor-based Pixel - fails the GPU rungs for a reason
- * that has nothing to do with memory, and still needs somewhere to land.
+ * GPU first: where OpenCL exists it is about five times lighter than CPU
+ * (710 MB against ~3.2 GB) as well as faster.
  *
- * The previous version branched once: memory error meant a smaller GPU
- * context, anything else meant CPU at full context, and if THAT was refused
- * there was no rung left. That is exactly how this phone failed - it fell
- * straight to cpu/4096, was refused for being ~62 MB short, and stopped.
+ * Reaching a CPU rung AT ALL means this device exposes no OpenCL - the Exynos
+ * 9611 in a Galaxy M31s, every Tensor-based Pixel - and on that class of
+ * hardware memory is the binding constraint, not speed. So the CPU rung asks
+ * for the smallest context outright instead of discovering the ceiling by
+ * crashing into it. That is not hypothetical: E4B at cpu/4096 took this phone
+ * to 4.3 GB resident with 119 MB left and froze it (ADR-006).
  *
- * Context length is the cheapest thing to give up. 1024 tokens still holds a
- * retrieved clause and a question, which is all any prompt in this app sends.
+ * 1024 tokens still holds a retrieved clause and a question, which is all any
+ * prompt in this app sends, and output is capped at 150 tokens anyway.
  */
 const LOAD_LADDER = [
   { backend: "gpu", maxContextTokens: 4096 },
   { backend: "gpu", maxContextTokens: 2048 },
-  { backend: "gpu", maxContextTokens: 1024 },
-  { backend: "cpu", maxContextTokens: 4096 },
-  { backend: "cpu", maxContextTokens: 2048 },
   { backend: "cpu", maxContextTokens: 1024 },
 ] as const;
 
@@ -129,22 +124,27 @@ export function loadModel(
     if (!modelLocation.path) {
       throw new Error(
         "Model not found on this device. Push it over the cable:\n" +
-          "  adb push gemma-4-E4B-it.litertlm /sdcard/Download/",
+          "  adb push gemma-4-E2B-it.litertlm /sdcard/Download/",
       );
     }
     const MODEL_PATH = modelLocation.path;
 
-    const instance = createLLM({ enableMemoryTracking: true });
-
-    // Walk the ladder until a rung loads. Each attempt is recorded so the UI
-    // can say which one won - "CPU / 1024" is a materially different demo from
-    // "GPU / 4096" and the operator should be able to see which they have.
+    // A FRESH instance per attempt, and the failed one is closed.
+    //
+    // Reusing one instance across rungs was the bug: a failed native load does
+    // not hand back what it already mapped, so each rung started from a higher
+    // floor than the last and a ladder meant to degrade gracefully instead
+    // walked the device down into an OOM. close() permanently invalidates the
+    // candidate, which is what a dead attempt deserves; unload() would keep it
+    // reusable and keep its allocations reachable.
     let lastErr: unknown = null;
     let won: (typeof LOAD_LADDER)[number] | null = null;
+    let instance: LiteRTLMInstance | null = null;
 
     for (const rung of LOAD_LADDER) {
+      const candidate = createLLM({ enableMemoryTracking: true });
       try {
-        await instance.loadModel(
+        await candidate.loadModel(
           MODEL_PATH,
           {
             backend: rung.backend,
@@ -154,10 +154,16 @@ export function loadModel(
           },
           onProgress,
         );
+        instance = candidate;
         won = rung;
         break;
       } catch (err) {
         lastErr = err;
+        try {
+          candidate.close();
+        } catch {
+          // Already dead. Nothing left to release.
+        }
       }
     }
 
@@ -167,7 +173,7 @@ export function loadModel(
       const detail = lastErr instanceof Error ? lastErr.message : String(lastErr);
       throw new Error(
         isMemoryError(lastErr)
-          ? "Not enough free memory for Gemma 4 E4B, even at the smallest " +
+          ? "Not enough free memory for Gemma 4 E2B, even at the smallest " +
             "context setting. Close other apps and try again.\n\n" + detail
           : detail,
       );
@@ -175,8 +181,8 @@ export function loadModel(
 
     loadedConfig = won;
 
-    llm = instance;
-    return instance;
+    llm = instance!;
+    return llm;
   })();
 
   loading.catch(() => {
@@ -340,7 +346,7 @@ export async function extractDuties(
  * ------------------------------------------------------------------ */
 
 /**
- * Spoken audio goes straight in â€” E4B takes audio natively, so there is no
+ * Spoken audio goes straight in â€” E2B takes audio natively, so there is no
  * Whisper, no separate speech-to-text model, no extra 500 MB to load. One
  * fewer dependency than the obvious architecture.
  */

@@ -17,7 +17,7 @@
 
 import { File, Paths } from "expo-file-system";
 
-export const MODEL_FILENAME = "gemma-4-E4B-it.litertlm";
+export const MODEL_FILENAME = "gemma-4-E2B-it.litertlm";
 
 /** Byte-exact size of the official file. A short file means a truncated copy. */
 export const MODEL_BYTES = 3_659_530_240;
@@ -33,9 +33,9 @@ export const MODEL_BYTES = 3_659_530_240;
  *
  * adb cannot write there directly, but on a debuggable build run-as can:
  *
- *   adb push gemma-4-E4B-it.litertlm /data/local/tmp/
- *   adb shell run-as in.neuraforge.anupalan  *     cp /data/local/tmp/gemma-4-E4B-it.litertlm files/
- *   adb shell rm /data/local/tmp/gemma-4-E4B-it.litertlm
+ *   adb push gemma-4-E2B-it.litertlm /data/local/tmp/
+ *   adb shell run-as in.neuraforge.anupalan  *     cp /data/local/tmp/gemma-4-E2B-it.litertlm files/
+ *   adb shell rm /data/local/tmp/gemma-4-E2B-it.litertlm
  *
  * For a release build, bundle it instead: -PbundleModel=true.
  */

@@ -181,3 +181,35 @@ export interface DutiesOut {
   created: Obligation[];
   rejected: RejectedDuty[];
 }
+
+export interface Evidence {
+  id: number;
+  obligation_id: number;
+  mine_id: number;
+  client_id: string | null;
+  photo_path: string | null;
+  photo_sha256: string | null;
+  lat: number;
+  lon: number;
+  inside_lease: boolean | null;
+  observation: string | null;
+  captured_at: string;
+  chain_hash: string;
+  prev_hash: string;
+  vision_result: {
+    pass?: boolean | null;
+    detections?: Array<{ label: string; confidence: number }>;
+    error?: string;
+  } | null;
+}
+
+export interface ObligationDetail extends Obligation {
+  clause_text: string;
+  evidence: Evidence[];
+  risk: {
+    score: number;
+    band: Band;
+    factors?: Record<string, number>;
+  } | null;
+}
+
