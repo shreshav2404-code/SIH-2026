@@ -70,7 +70,9 @@ function MethaneChart() {
             />
             <Tooltip
               contentStyle={{ fontSize: 12, borderRadius: 6 }}
-              formatter={(v: number) => [`${v} %`, "CH₄"]}
+              // Recharts types the value as ValueType | undefined, so it cannot
+              // be narrowed to number in the signature.
+              formatter={(v) => [`${Number(v ?? 0)} %`, "CH₄"]}
             />
             <ReferenceLine
               y={data.stats.threshold}

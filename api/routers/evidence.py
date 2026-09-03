@@ -129,6 +129,54 @@ async def upload_evidence(
     return ev
 
 
+@router.get("")
+def list_evidence(
+    mine_id: int | None = None,
+    limit: int = 50,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+) -> list[dict]:
+    """Evidence for the dashboard, newest first.
+
+    Captures were being stored, hash-chained and vision-screened, and then
+    shown to nobody: there was no way to list them, so the photograph, the
+    YOLO verdict and the chain hash all existed only in the database. A
+    regulator has to be able to look at the evidence.
+
+    `vision_result` is returned verbatim rather than reduced to a pass/flag
+    flag, so the dashboard can show WHICH objects were detected. A verdict
+    without its reasons is not auditable.
+    """
+    # Raises rather than returning None: a regulator must name a mine, and
+    # everyone else is pinned to their own.
+    scoped = resolve_mine_id(user, mine_id)
+
+    rows = db.scalars(
+        select(Evidence)
+        .where(Evidence.mine_id == scoped)
+        .order_by(Evidence.captured_at.desc())
+        .limit(min(limit, 200))
+    ).all()
+    return [
+        {
+            "id": e.id,
+            "mine_id": e.mine_id,
+            "obligation_id": e.obligation_id,
+            "observation": e.observation,
+            "lat": e.lat,
+            "lon": e.lon,
+            "captured_at": e.captured_at,
+            "inside_lease": e.inside_lease,
+            "vision_result": e.vision_result,
+            "photo_sha256": e.photo_sha256,
+            "prev_hash": e.prev_hash,
+            "chain_hash": e.chain_hash,
+            "has_photo": bool(e.photo_path),
+        }
+        for e in rows
+    ]
+
+
 @router.get("/verify", response_model=VerifyOut)
 def verify(
     mine_id: int | None = None,

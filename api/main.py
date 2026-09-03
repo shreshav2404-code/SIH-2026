@@ -100,6 +100,7 @@ from routers import auth as auth_router  # noqa: E402
 from routers import evidence as evidence_router  # noqa: E402
 from routers import geo as geo_router  # noqa: E402
 from routers import obligations as obligations_router  # noqa: E402
+from routers import reports as reports_router  # noqa: E402
 from routers import returns as returns_router  # noqa: E402
 from routers import risk as risk_router  # noqa: E402
 from routers import rulebook as rulebook_router  # noqa: E402
@@ -115,5 +116,6 @@ for r in (
     risk_router,
     geo_router,
     returns_router,
+    reports_router,
 ):
     app.include_router(r.router)

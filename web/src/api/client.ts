@@ -40,3 +40,20 @@ api.interceptors.response.use(
     return Promise.reject(error);
   },
 );
+
+/**
+ * Open a server-rendered HTML report in a new tab.
+ *
+ * A plain <a href> cannot be used: these endpoints require a bearer token and
+ * the browser sends none on a top-level navigation, so the tab would show a
+ * 401. Fetch it through this client, which does attach the token, and hand the
+ * new tab a blob URL instead.
+ */
+export async function openReport(path: string): Promise<void> {
+  const res = await api.get(path, { responseType: "blob" });
+  const url = URL.createObjectURL(res.data as Blob);
+  window.open(url, "_blank", "noopener");
+  // The new tab has already loaded the blob by the time this fires; revoking
+  // sooner would race it, and never revoking leaks the document.
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
