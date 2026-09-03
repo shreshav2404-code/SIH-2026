@@ -107,3 +107,26 @@ This file tracks all key technical, architectural, and operational decisions mad
   1. Construct a fresh instance per rung and `close()` the failed one. `close()` permanently invalidates it; `unload()` was rejected because it keeps the instance reusable and its allocations reachable.
   2. Collapse the CPU rungs to a single `cpu/1024`. Reaching a CPU rung at all means no OpenCL, which on this hardware class means memory — not speed — is binding, so ask for the smallest context outright rather than discovering the ceiling by crashing into it.
 - **Consequences:** Failed attempts no longer accumulate. CPU-path devices are capped at 1024 context, which still holds a retrieved clause plus a question; output was already capped at 150 tokens.
+
+---
+
+### ADR-010: Survey of Alternative On-Device Models
+- **Date:** 2026-09-03
+- **Status:** Accepted — E2B primary, Qwen3-1.7B held as fallback
+- **Context:** Before committing to E2B, the question was whether a different small model offers better capability per byte on a CPU-only mid-range handset.
+- **Hard constraint:** The candidate must ship as a **`.litertlm`** file. `.task` is MediaPipe LLM Inference format and cannot be loaded by LiteRT-LM, so it would mean replacing the runtime — discarding all the native build work in `ANDROID_BUILD.md`. This alone disqualifies **Gemma 3 4B IT**, which publishes `.task` only.
+- **Findings** (litert-community, smallest `.litertlm` per repo):
+
+  | Model | Size | Est. CPU resident | Multimodal |
+  |---|---|---|---|
+  | Gemma 4 E2B | 2.59 GB | ~3.2 GB | audio + image |
+  | Qwen3-4B-Instruct-2507 | 2.48 GB | ~3.1 GB | text only |
+  | Qwen3.5-4B | 2.57 GB | ~3.2 GB | text only |
+  | Qwen3-1.7B | 0.91 GB | ~1.4 GB | text only |
+  | Gemma3-1B-IT | 0.54 GB | ~0.9 GB | text only |
+
+- **Analysis:**
+  1. **Qwen3-4B-Instruct-2507 is smaller than E2B (2.48 vs 2.59 GB) while being a full 4B dense model**, where E2B is 4B-raw / 2B-effective. For this app's actual work — strict-JSON clause→duty extraction, grounded ledger Q&A, observation drafting — it is the stronger text model at no extra memory cost.
+  2. The only thing E2B buys over it is multimodality, which is exactly the spoken-Hindi demo moment. The photo path does not depend on it: YOLOv8n on the backend already triages evidence images.
+  3. There is **no ASR escape hatch**. Whisper, Qwen3-ASR and Parakeet are LiteRT models, not LiteRT-LM, so pairing a text LLM with on-device speech means standing up a second runtime.
+- **Decision:** Test E2B first — it preserves the differentiating voice demo at a memory cost we have reason to think fits. Hold **Qwen3-1.7B (0.91 GB, ~1.4 GB resident)** downloaded and ready as the fallback that is near-certain to load on this hardware. If the voice moment is cut for any reason, switch to **Qwen3-4B-Instruct-2507** rather than staying on E2B, since at that point E2B has no advantage left.
