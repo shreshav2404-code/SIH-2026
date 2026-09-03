@@ -6,6 +6,35 @@ import { API_BASE } from "./config";
 export const api = axios.create({ baseURL: API_BASE, timeout: 15000 });
 
 const TOKEN_KEY = "anupalan.token";
+const SERVER_KEY = "anupalan.server";
+
+/**
+ * The API host is stored on the device, not compiled in.
+ *
+ * A release APK is handed to a teammate whose laptop has a different IP, and
+ * at a venue it may have to go through a tunnel URL instead. Baking the host
+ * into the binary makes changing one string cost a full rebuild that
+ * repackages 3.66 GB of model, so the compiled value in config.ts is only the
+ * default - whatever is saved here wins.
+ */
+export async function loadServerUrl(): Promise<string> {
+  const saved = await AsyncStorage.getItem(SERVER_KEY);
+  const url = saved?.trim() || API_BASE;
+  api.defaults.baseURL = url;
+  return url;
+}
+
+export async function saveServerUrl(url: string): Promise<string> {
+  const clean = url.trim().replace(/\/+$/, "") || API_BASE;
+  api.defaults.baseURL = clean;
+  await AsyncStorage.setItem(SERVER_KEY, clean);
+  return clean;
+}
+
+/** Where requests are actually going right now. */
+export function currentServerUrl(): string {
+  return api.defaults.baseURL ?? API_BASE;
+}
 let cachedToken: string | null = null;
 
 export async function loadToken() {
@@ -81,7 +110,7 @@ export async function checkInsideLease(mine_id: number, lat: number, lon: number
 
 export async function ping(): Promise<boolean> {
   try {
-    await axios.get(`${API_BASE}/health`, { timeout: 3500 });
+    await axios.get(`${currentServerUrl()}/health`, { timeout: 3500 });
     return true;
   } catch {
     return false;

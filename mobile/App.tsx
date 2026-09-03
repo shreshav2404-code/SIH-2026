@@ -18,8 +18,18 @@ import {
   View,
 } from "react-native";
 
-import { loadToken, login, me, ping, type Duty, type User } from "./src/lib/api";
-import { API_BASE } from "./src/lib/config";
+import {
+  currentServerUrl,
+  loadServerUrl,
+  loadToken,
+  login,
+  me,
+  ping,
+  saveServerUrl,
+  type Duty,
+  type User,
+} from "./src/lib/api";
+import { LAN_HOST } from "./src/lib/config";
 import { counts } from "./src/lib/db";
 import Ask from "./src/screens/Ask";
 import Capture from "./src/screens/Capture";
@@ -40,6 +50,8 @@ function AppInner() {
 
   useEffect(() => {
     (async () => {
+      // Must come first: every request below uses this base URL.
+      await loadServerUrl();
       await loadToken();
       try {
         setUser(await me());
@@ -185,11 +197,14 @@ function Login({ onSignedIn }: { onSignedIn: (u: User) => void }) {
   const [password, setPassword] = useState("demo1234");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [server, setServer] = useState(currentServerUrl());
+  const [editingServer, setEditingServer] = useState(false);
 
   async function submit() {
     setBusy(true);
     setError(null);
     try {
+      await saveServerUrl(server);
       onSignedIn(await login(username, password));
     } catch (err) {
       // Underground, "wrong password" versus "no signal" are completely
@@ -198,7 +213,7 @@ function Login({ onSignedIn }: { onSignedIn: (u: User) => void }) {
 
       if (status === 401) setError("Incorrect username or password.");
       else if (status === undefined)
-        setError(`Cannot reach the API at ${API_BASE}. Check the connection.`);
+        setError(`Cannot reach the API at ${server}. Check the address below.`);
       else if (status >= 500)
         setError(`API error ${status} — the server is up but failing.`);
       else setError(`Sign-in failed (HTTP ${status}).`);
@@ -229,6 +244,23 @@ function Login({ onSignedIn }: { onSignedIn: (u: User) => void }) {
           placeholder="Password"
         />
         {error && <Text style={s.error}>{error}</Text>}
+
+        {editingServer ? (
+          <TextInput
+            style={s.input}
+            value={server}
+            onChangeText={setServer}
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="url"
+            placeholder={LAN_HOST}
+          />
+        ) : (
+          <TouchableOpacity onPress={() => setEditingServer(true)}>
+            <Text style={s.serverLine}>Server: {server} · change</Text>
+          </TouchableOpacity>
+        )}
+
         <TouchableOpacity
           style={[s.primary, busy && { opacity: 0.6 }]}
           onPress={submit}
@@ -243,6 +275,8 @@ function Login({ onSignedIn }: { onSignedIn: (u: User) => void }) {
 
 const s = StyleSheet.create({
   app: { flex: 1, backgroundColor: C.bg },
+  // Deliberately quiet. It matters when the API moves, and never otherwise.
+  serverLine: { color: C.inkSoft, fontSize: 12, textAlign: "center", paddingVertical: 6 },
   // Top inset paints in the header colour so the status bar blends
   // into the header instead of showing a pale band above it.
   appDark: { flex: 1, backgroundColor: C.header },

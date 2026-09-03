@@ -138,12 +138,22 @@ storage on first launch.
 
 ## Point the app at your API
 
-The phone is not the emulator: `10.0.2.2` means nothing to it. Edit
-`mobile/src/lib/config.ts`:
+The phone is not the emulator: `10.0.2.2` means nothing to it. **You do not
+edit code for this any more** — the sign-in screen carries a `Server` line;
+tap `change`, type the address, and it is saved on the device.
 
-```ts
-export const API_BASE = LAN_HOST;   // http://192.168.1.36:8000
+That matters because the laptop's IP moves: it was `192.168.1.36` and DHCP has
+since made it `192.168.1.101`. Baking it in meant a rebuild that repackages
+3.66 GB of model to change one string, once per teammate.
+
+Find the current address with `ipconfig`, or:
+
+```bash
+curl -s http://192.168.1.101:8000/health
 ```
+
+Over a cable, `adb reverse tcp:8000 tcp:8000` and use `http://localhost:8000`
+instead — it sidesteps wifi, LAN addressing and the firewall entirely.
 
 Phone and laptop must share a network, and the firewall rule must exist
 (already added: `ANUPALAN API 8000`). If venue wifi blocks device-to-device:
@@ -166,6 +176,6 @@ breaks nothing that matters.
 - [ ] `bundleModel=true` in `android/gradle.properties`
 - [ ] copy task + `noCompress` in `android/app/build.gradle`
 - [ ] `models/gemma-4-E4B-it.litertlm` present, 3,659,530,240 bytes
-- [ ] `API_BASE` switched to `LAN_HOST` (or a tunnel URL)
+- [ ] Server address set on the sign-in screen (no rebuild needed)
 - [ ] Build variant set to **release** in Android Studio
 - [ ] ~8 GB free on the phone
