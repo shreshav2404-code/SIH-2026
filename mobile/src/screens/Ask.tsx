@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -8,9 +10,20 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { fetchDuties } from "../lib/api";
-import { describeOrigin, locateModel } from "../lib/modelSource";
+import { fetchDuties, type Duty } from "../lib/api";
+import {
+  DEFAULT_MODEL_ID,
+  describeOrigin,
+  formatBytes,
+  locateModel,
+  modelById,
+  MODELS,
+  multimodalModel,
+  type ModelId,
+  type ModelSpec,
+} from "../lib/modelSource";
 import type { LedgerFact } from "../lib/llm";
 
 /**
@@ -54,6 +67,55 @@ type ModelState =
   | { kind: "ready" }
   | { kind: "error"; message: string };
 
+/**
+ * How many duties go into a ledger prompt.
+ *
+ * It used to send 25, which cost about 875 tokens of prefill on every single
+ * question and was the bulk of a measured 62-second wait on the phone. Prefill
+ * scales with prompt length, so this is the cheapest large speed-up available.
+ *
+ * It also tends to IMPROVE answers rather than harm them: 25 duties is mostly
+ * noise for a targeted question, and the model has to find the relevant line
+ * among them. The risk is the opposite one - an aggregate question ("how many
+ * duties are there?") must not be answered from a truncated list - which is
+ * why buildFacts() always states the true total in the prompt.
+ */
+const MAX_FACTS = 10;
+
+/** Words too common to signal anything about which duty is being asked about. */
+const STOPWORDS = new Set([
+  "what","which","who","whom","whose","when","where","why","how","is","are",
+  "was","were","the","a","an","and","or","of","for","to","in","on","at","by",
+  "it","its","my","me","i","do","does","did","has","have","had","this","that",
+  "there","their","them","they","get","got","need","needs","show","tell","list",
+]);
+
+/**
+ * Pick the duties most likely to answer this question.
+ *
+ * Overdue duties sort first regardless of wording: they are the compliance
+ * story, and a question that mentions none of them explicitly ("what should I
+ * do first?") still means them. After that it is plain keyword overlap, which
+ * is crude but runs instantly and needs no second model - MiniLM would be
+ * better and is the intended upgrade, but it is not wired up on this path yet.
+ */
+function rankDuties(items: Duty[], question: string): Duty[] {
+  const terms = question
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((w) => w.length > 2 && !STOPWORDS.has(w));
+
+  const scored = items.map((d) => {
+    const hay = `${d.title} ${d.act} ${d.clause_ref} ${d.owner_role} ${d.status}`.toLowerCase();
+    let score = terms.reduce((n, t) => (hay.includes(t) ? n + 1 : n), 0);
+    if (d.status === "overdue") score += 2;
+    return { d, score };
+  });
+
+  scored.sort((a, b) => b.score - a.score);
+  return scored.map((x) => x.d);
+}
+
 const SUGGESTIONS = [
   "What is overdue and who owns it?",
   "Which duties need a photo?",
@@ -65,24 +127,56 @@ export default function Ask({ lastPhotoUri }: { lastPhotoUri?: string | null }) 
   const [turns, setTurns] = useState<Turn[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
+  /** Partial answer while tokens arrive. Null when nothing is generating. */
+  const [streaming, setStreaming] = useState<string | null>(null);
+  /** Which model the user has chosen. Only one is ever resident. */
+  const [activeId, setActiveId] = useState<ModelId>(DEFAULT_MODEL_ID);
   const scroller = useRef<ScrollView>(null);
+  const insets = useSafeAreaInsets();
 
-  const found = locateModel();
+  const spec = modelById(activeId);
+  const found = locateModel(spec);
 
-  const warm = useCallback(async () => {
+  /** Load a specific model, swapping out whatever is resident. */
+  const warm = useCallback(async (want: ModelSpec) => {
     setState({ kind: "loading", pct: 0 });
     try {
       const llm = await getLlm();
-      await llm.loadModel((pct) => setState({ kind: "loading", pct }));
+      // switchModel unloads first and unconditionally, so the two never
+      // coexist in memory - which matters on a 7.5 GB phone where E2B alone
+      // peaks at 2.5 GB.
+      await llm.switchModel(want, (pct) => setState({ kind: "loading", pct }));
+      setActiveId(want.id);
       setState({ kind: "ready" });
     } catch (e) {
       setState({ kind: "error", message: String(e instanceof Error ? e.message : e) });
     }
   }, []);
 
+  /**
+   * Make sure the multimodal model is the one loaded.
+   *
+   * Voice and photo input do not exist on the Qwen build, so rather than fail
+   * with a confusing engine error, swap first and say so in the thread.
+   */
+  const ensureMultimodal = useCallback(async (): Promise<boolean> => {
+    const mm = multimodalModel();
+    if (llmModule?.activeSpec?.id === mm.id) return true;
+    push({
+      role: "model",
+      text: `Switching to ${mm.label} - it is the only bundled model that can read speech and images.`,
+      note: "model switch",
+    });
+    await warm(mm);
+    return llmModule?.activeSpec?.id === mm.id;
+  }, [warm]);
+
   useEffect(() => {
     // Only reflects an already-warm model; never triggers the import itself.
-    if (llmModule?.isLoaded()) setState({ kind: "ready" });
+    if (llmModule?.isLoaded()) {
+      setState({ kind: "ready" });
+      if (llmModule.activeSpec) setActiveId(llmModule.activeSpec.id);
+    }
   }, []);
 
   function push(t: Turn) {
@@ -97,27 +191,37 @@ export default function Ask({ lastPhotoUri }: { lastPhotoUri?: string | null }) 
    */
   async function run(
     label: string,
-    work: () => Promise<string | { text: string; note?: string }>,
+    work: (
+      onToken: (chunk: string) => void,
+    ) => Promise<string | { text: string; note?: string }>,
     note?: string,
   ) {
     if (state.kind !== "ready") {
-      await warm();
+      await warm(spec);
       if (!llmModule?.isLoaded()) return;
     }
     push({ role: "you", text: label });
     setBusy(true);
+    setStreaming("");
     try {
-      const result = await work();
+      // Tokens land in `streaming`, which renders as a live bubble. The
+      // finished turn is pushed once, so the transcript holds one entry.
+      const result = await work((chunk) =>
+        setStreaming((prev) => (prev ?? "") + chunk),
+      );
       const body = typeof result === "string" ? result : result.text;
       const caption = typeof result === "string" ? note : (result.note ?? note);
+      setStreaming(null);
       push({ role: "model", text: body.trim(), note: caption });
     } catch (e) {
+      setStreaming(null);
       push({
         role: "model",
         text: `Could not answer: ${e instanceof Error ? e.message : e}`,
       });
     } finally {
       setBusy(false);
+      setStreaming(null);
     }
   }
 
@@ -127,9 +231,13 @@ export default function Ask({ lastPhotoUri }: { lastPhotoUri?: string | null }) 
     setInput("");
     await run(
       question,
-      async () => {
+      async (onToken) => {
         const { items } = await fetchDuties();
-        const facts: LedgerFact[] = items.slice(0, 25).map((d) => ({
+        // Only the duties that could plausibly answer THIS question. Sending
+        // all 25 cost ~875 tokens of prefill on every message and was most of
+        // a measured 62-second wait.
+        const chosen = rankDuties(items, question).slice(0, MAX_FACTS);
+        const facts: LedgerFact[] = chosen.map((d) => ({
           title: d.title,
           act: d.act,
           clause_ref: d.clause_ref,
@@ -141,6 +249,8 @@ export default function Ask({ lastPhotoUri }: { lastPhotoUri?: string | null }) 
         const { answer, unverified } = await (await getLlm()).askLedger(
           question,
           facts,
+          items.length,
+          (tok: string) => onToken(tok),
         );
 
         // Never label an answer "grounded" without checking it. The model
@@ -169,18 +279,39 @@ export default function Ask({ lastPhotoUri }: { lastPhotoUri?: string | null }) 
       <ScrollView contentContainerStyle={s.gate}>
         <Text style={s.gateTitle}>On-device assistant</Text>
         <Text style={s.gateBody}>
-          Gemma 4 E2B runs entirely on this device. No server, no cloud, no API —
+          The model runs entirely on this device. No server, no cloud, no API —
           it answers in airplane mode.
         </Text>
 
+        <Text style={s.pickLabel}>Choose a model</Text>
+        {MODELS.map((m) => {
+          const loc = locateModel(m);
+          const picked = m.id === activeId;
+          return (
+            <TouchableOpacity
+              key={m.id}
+              style={[s.modelCard, picked && s.modelCardOn]}
+              onPress={() => setActiveId(m.id)}
+              disabled={state.kind === "loading"}
+            >
+              <View style={s.modelHead}>
+                <Text style={[s.modelName, picked && s.modelNameOn]}>{m.label}</Text>
+                <Text style={s.modelSize}>{formatBytes(m.approxBytes)}</Text>
+              </View>
+              <Text style={s.modelBlurb}>{m.blurb}</Text>
+              <Text style={s.modelState}>
+                {loc.path ? describeOrigin(loc.origin) : "extracts from the app on first use"}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+
         <View style={s.card}>
-          <Row label="Model file">
-            {found.path ? describeOrigin(found.origin) : "not found"}
-          </Row>
-          <Row label="Size">
+          <Row label="Selected">{spec.label}</Row>
+          <Row label="On device">
             {found.bytes
-              ? `${(found.bytes / 1e9).toFixed(2)} GB${found.complete ? "" : " (incomplete)"}`
-              : "—"}
+              ? `${formatBytes(found.bytes)}${found.complete ? "" : " (incomplete)"}`
+              : "not yet extracted"}
           </Row>
           <Row label="Status" last>
             {state.kind === "loading"
@@ -205,7 +336,7 @@ export default function Ask({ lastPhotoUri }: { lastPhotoUri?: string | null }) 
 
         <TouchableOpacity
           style={[s.primary, state.kind === "loading" && s.disabled]}
-          onPress={warm}
+          onPress={() => warm(spec)}
           disabled={state.kind === "loading"}
         >
           {state.kind === "loading" ? (
@@ -215,32 +346,59 @@ export default function Ask({ lastPhotoUri }: { lastPhotoUri?: string | null }) 
             </View>
           ) : (
             <Text style={s.primaryText}>
-              {state.kind === "error" ? "Try again" : "Load the model"}
+              {state.kind === "error" ? "Try again" : `Load ${spec.label}`}
             </Text>
           )}
         </TouchableOpacity>
 
         <Text style={s.gateNote}>
-          Mapping 3.66 GB takes a few seconds on first open. Warm it before a
-          demo, never during one.
+          First use extracts the model out of the app, which takes a minute for
+          the larger one. Every load after that is about 17 seconds. Warm it
+          before a demo, never during one.
         </Text>
       </ScrollView>
     );
   }
 
   return (
-    <View style={s.wrap}>
+    // The window does not resize when the keyboard opens, because the app is
+    // edge-to-edge (gradle.properties: edgeToEdgeEnabled=true) and draws behind
+    // the system bars - so adjustResize in the manifest is not enough on its
+    // own and the composer ended up underneath the keyboard.
+    <KeyboardAvoidingView
+      style={s.wrap}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={insets.bottom}
+    >
       <View style={s.banner}>
         <Text style={s.bannerText}>
-          ON-DEVICE ·{" "}
-          {llmModule?.modelLocation
-            ? describeOrigin(llmModule.modelLocation.origin)
-            : "loaded"}
+          ON-DEVICE · {llmModule?.activeSpec?.label ?? spec.label}
           {llmModule?.loadedConfig
             ? ` · ${llmModule.loadedConfig.backend.toUpperCase()} / ${llmModule.loadedConfig.maxContextTokens}`
             : ""}{" "}
           · no network used
         </Text>
+      </View>
+
+      {/* Switch model mid-conversation. switchModel() closes the resident one
+          first, so both are never in memory at once. */}
+      <View style={s.switcher}>
+        {MODELS.map((m) => {
+          const on = (llmModule?.activeSpec?.id ?? activeId) === m.id;
+          return (
+            <TouchableOpacity
+              key={m.id}
+              style={[s.switchBtn, on && s.switchBtnOn]}
+              onPress={() => !on && !busy && warm(m)}
+              disabled={busy || on}
+            >
+              <Text style={[s.switchText, on && s.switchTextOn]}>
+                {m.label}
+                {m.multimodal ? " · voice/photo" : ""}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
       </View>
 
       <ScrollView ref={scroller} style={s.thread} contentContainerStyle={{ padding: 12 }}>
@@ -265,7 +423,15 @@ export default function Ask({ lastPhotoUri }: { lastPhotoUri?: string | null }) 
           </View>
         ))}
 
-        {busy && (
+        {/* Tokens as they arrive. Without this the screen sits blank for the
+            whole generation, which measured 62 seconds on this phone. */}
+        {streaming !== null && streaming.length > 0 && (
+          <View style={[s.bubble, s.model]}>
+            <Text style={s.modelText}>{streaming}</Text>
+          </View>
+        )}
+
+        {busy && streaming !== null && streaming.length === 0 && (
           <View style={[s.bubble, s.model]}>
             <ActivityIndicator color={C.accent} size="small" />
           </View>
@@ -273,17 +439,21 @@ export default function Ask({ lastPhotoUri }: { lastPhotoUri?: string | null }) 
       </ScrollView>
 
       <View style={s.actions}>
+        {/* Text in, observation out. This does NOT record audio yet - the
+            sample sentence below stands in for a transcript, and the label
+            says so rather than implying a microphone that is not wired up.
+            Real capture arrives with expo-audio; see PROGRESS.md. */}
         <Action
-          label="Dictate observation"
+          label="Draft observation (sample)"
           onPress={() =>
             run(
-              "Draft an observation from what I said",
+              "Draft an observation from: gas reading is high in panel three",
               async () =>
                 (await getLlm()).draftObservation(
                   "gas reading is high in panel three, ventilation feels weak",
                   null,
                 ),
-              "voice → structured observation",
+              "sample text → structured observation",
             )
           }
         />
@@ -305,14 +475,17 @@ export default function Ask({ lastPhotoUri }: { lastPhotoUri?: string | null }) 
         {lastPhotoUri && (
           <Action
             label="Describe photo"
-            onPress={() =>
-              run(
+            onPress={async () => {
+              // Only the multimodal model can read an image; swap first rather
+              // than fail with an engine error the officer cannot act on.
+              if (!(await ensureMultimodal())) return;
+              await run(
                 "What does the evidence photo show?",
                 async () =>
                   (await getLlm()).describePhoto(lastPhotoUri, "What is wrong here?"),
                 "native image input",
-              )
-            }
+              );
+            }}
           />
         )}
       </View>
@@ -335,7 +508,7 @@ export default function Ask({ lastPhotoUri }: { lastPhotoUri?: string | null }) 
           <Text style={s.sendText}>Ask</Text>
         </TouchableOpacity>
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -366,6 +539,36 @@ function Action({ label, onPress }: { label: string; onPress: () => void }) {
 
 const s = StyleSheet.create({
   wrap: { flex: 1, backgroundColor: C.bg },
+
+  // ---- model picker (gate screen) ----
+  pickLabel: {
+    marginTop: 18, marginBottom: 8, fontSize: 11, fontWeight: "700",
+    letterSpacing: 0.8, color: C.inkSoft,
+  },
+  modelCard: {
+    backgroundColor: C.panel, borderRadius: 8, borderWidth: 1,
+    borderColor: C.line, padding: 12, marginBottom: 8,
+  },
+  modelCardOn: { borderColor: C.accent, borderWidth: 2 },
+  modelHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  modelName: { fontSize: 15, fontWeight: "700", color: C.ink },
+  modelNameOn: { color: C.accent },
+  modelSize: { fontSize: 12, color: C.inkSoft, fontVariant: ["tabular-nums"] },
+  modelBlurb: { marginTop: 3, fontSize: 12, color: C.inkSoft },
+  modelState: { marginTop: 6, fontSize: 11, color: C.inkSoft, fontStyle: "italic" },
+
+  // ---- model switcher (chat view) ----
+  switcher: {
+    flexDirection: "row", gap: 6, paddingHorizontal: 10, paddingVertical: 6,
+    backgroundColor: C.panel, borderBottomWidth: 1, borderBottomColor: C.line,
+  },
+  switchBtn: {
+    flex: 1, paddingVertical: 6, paddingHorizontal: 8, borderRadius: 6,
+    borderWidth: 1, borderColor: C.line, alignItems: "center",
+  },
+  switchBtnOn: { backgroundColor: C.accent, borderColor: C.accent },
+  switchText: { fontSize: 11, color: C.inkSoft },
+  switchTextOn: { color: "#fff", fontWeight: "700" },
   gate: { padding: 20, paddingBottom: 40 },
   gateTitle: { fontSize: 20, fontWeight: "700", color: C.ink },
   gateBody: { marginTop: 6, fontSize: 13, lineHeight: 19, color: C.inkSoft },

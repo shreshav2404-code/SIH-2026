@@ -1,5 +1,5 @@
 ﻿/**
- * Gemma 4 E2B, on-device, via LiteRT-LM.
+ * The on-device models, via LiteRT-LM.
  *
  * THIS IS THE ONLY LLM IN THE SYSTEM. There is no server model, no Ollama, no
  * cloud, no API. The backend does no LLM work at all, so nothing about the
@@ -17,10 +17,26 @@ import {
   type MultimodalPart,
 } from "react-native-litert-lm";
 
-import { ensureModel, type ModelLocation } from "./modelSource";
+/**
+ * Per-token callback. Declared here rather than imported: the package defines
+ * it in src/inferenceRouting.ts but does not re-export it from the root, and
+ * reaching into a dependency's internals is how an npm update breaks a build.
+ */
+export type TokenCallback = (token: string, done: boolean) => void;
 
-/** Where the model was actually found, for the splash screen to report. */
+import {
+  DEFAULT_MODEL_ID,
+  ensureModel,
+  modelById,
+  type ModelLocation,
+  type ModelSpec,
+} from "./modelSource";
+
+/** Where the active model was found, for the diagnostics panel to report. */
 export let modelLocation: ModelLocation | null = null;
+
+/** Which model is resident right now. Null until one is loaded. */
+export let activeSpec: ModelSpec | null = null;
 
 /** Tight prompts, short answers. Long generation is where on-device feels slow. */
 const MAX_TOKENS = 150;
@@ -93,6 +109,8 @@ export let loadedConfig: (typeof LOAD_LADDER)[number] | null = null;
 
 let llm: LiteRTLMInstance | null = null;
 let loading: Promise<LiteRTLMInstance> | null = null;
+/** The spec `loading` is working on, so a concurrent call can tell them apart. */
+let loadingSpec: ModelSpec | null = null;
 
 export type LoadState = "idle" | "loading" | "ready" | "error";
 
@@ -111,20 +129,33 @@ function text(s: string): MultimodalPart[] {
  * 0.15/0.16.
  */
 export function loadModel(
+  spec: ModelSpec = modelById(DEFAULT_MODEL_ID),
   onProgress?: (pct: number) => void,
 ): Promise<LiteRTLMInstance> {
-  if (llm) return Promise.resolve(llm);
-  if (loading) return loading;
+  // Already have exactly this model - nothing to do.
+  if (llm && activeSpec?.id === spec.id) return Promise.resolve(llm);
+  // A load of this same model is already in flight; join it.
+  if (loading && loadingSpec?.id === spec.id) return loading;
+  // A DIFFERENT model is resident. Switching is explicit, so a caller never
+  // silently pays a reload it did not ask for.
+  if (llm && activeSpec && activeSpec.id !== spec.id) {
+    return Promise.reject(
+      new Error(
+        `${activeSpec.label} is loaded. Call switchModel() to change to ${spec.label}.`,
+      ),
+    );
+  }
 
+  loadingSpec = spec;
   loading = (async () => {
     // Resolves the model wherever it is: already in app storage, bundled in
     // the APK (-PbundleModel=true), or pushed to /sdcard/Download with adb.
     // On the emulator it is the pushed copy.
-    modelLocation = await ensureModel(onProgress);
+    modelLocation = await ensureModel(spec, onProgress);
     if (!modelLocation.path) {
       throw new Error(
-        "Model not found on this device. Push it over the cable:\n" +
-          "  adb push gemma-4-E2B-it.litertlm /sdcard/Download/",
+        `${spec.label} is not on this device. It ships inside the APK, so a ` +
+          "build made without -PbundleModel=true will not have it.",
       );
     }
     const MODEL_PATH = modelLocation.path;
@@ -173,13 +204,14 @@ export function loadModel(
       const detail = lastErr instanceof Error ? lastErr.message : String(lastErr);
       throw new Error(
         isMemoryError(lastErr)
-          ? "Not enough free memory for Gemma 4 E2B, even at the smallest " +
-            "context setting. Close other apps and try again.\n\n" + detail
+          ? `Not enough free memory for ${spec.label}, even at the smallest ` +
+            "context setting. Close other apps and try again." + "\n\n" + detail
           : detail,
       );
     }
 
     loadedConfig = won;
+    activeSpec = spec;
 
     llm = instance!;
     return llm;
@@ -187,6 +219,7 @@ export function loadModel(
 
   loading.catch(() => {
     loading = null; // let a later attempt retry
+    loadingSpec = null;
   });
 
   return loading;
@@ -194,6 +227,46 @@ export function loadModel(
 
 export function isLoaded() {
   return llm !== null;
+}
+
+/**
+ * Release the resident model.
+ *
+ * `close()` rather than `unload()`: close permanently invalidates the instance,
+ * which is what we want before loading a different one. unload() keeps it
+ * reusable and its allocations reachable, and holding 0.9 GB of dead weights
+ * while mapping 2.6 GB more is how a 7.5 GB phone ends up thrashing.
+ */
+export function unloadModel(): void {
+  const dying = llm;
+  llm = null;
+  loading = null;
+  loadingSpec = null;
+  activeSpec = null;
+  loadedConfig = null;
+  modelLocation = null;
+  if (dying) {
+    try {
+      dying.close();
+    } catch {
+      // Already gone. Nothing left to release.
+    }
+  }
+}
+
+/**
+ * Swap the resident model for another one.
+ *
+ * Unloads first and unconditionally, so the two never coexist in memory. On a
+ * 7.5 GB phone that ordering is not a detail: E2B alone peaks at 2.5 GB.
+ */
+export async function switchModel(
+  spec: ModelSpec,
+  onProgress?: (pct: number) => void,
+): Promise<LiteRTLMInstance> {
+  if (llm && activeSpec?.id === spec.id) return llm;
+  unloadModel();
+  return loadModel(spec, onProgress);
 }
 
 export async function release() {
@@ -512,8 +585,28 @@ export function unverifiedCitations(answer: string, facts: LedgerFact[]): string
 export async function askLedger(
   question: string,
   facts: LedgerFact[],
+  /** How many duties exist in total, when `facts` is a trimmed selection. */
+  totalDuties?: number,
+  /**
+   * Called per token as they are produced.
+   *
+   * Without this the whole answer lands at once and the officer stares at a
+   * blank screen - measured at 62 seconds on the M31s. Streaming does not make
+   * generation faster, it makes the wait legible, which is most of the
+   * complaint.
+   */
+  onToken?: TokenCallback,
 ): Promise<LedgerAnswer> {
   const model = await loadModel();
+
+  // A trimmed list must never be presented as the whole ledger. Ask.tsx sends
+  // the most relevant duties only, so the model is told what it is NOT seeing.
+  const totalNote =
+    totalDuties && totalDuties > facts.length
+      ? `
+(These are the ${facts.length} most relevant of ${totalDuties} duties.` +
+        ` Do not claim this is the complete list.)`
+      : "";
 
   const table = facts
     .map(
@@ -528,6 +621,7 @@ export async function askLedger(
 
 LEDGER (the only facts you may use):
 ${table}
+${totalNote}
 
 QUESTION: ${question}
 
@@ -535,7 +629,7 @@ Answer in under 60 words, plainly. Cite every duty you mention EXACTLY as it
 appears in brackets above - copy it, do not rewrite it. If the ledger above
 does not contain the answer, say so. Do not use outside knowledge, and never
 state a statute or regulation number that is not listed above.`),
-    undefined,
+    onToken,
     { maxOutputTokens: MAX_TOKENS },
   );
 
