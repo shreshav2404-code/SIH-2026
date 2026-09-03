@@ -39,3 +39,11 @@ mobile/ios/
 .idea/
 Thumbs.db
 desktop.ini
+
+# local dev server logs
+.dev-*.log
+gradle-build.log
+sdk-*.log
+ndk-install.log
+x86-image.log
+*.png
