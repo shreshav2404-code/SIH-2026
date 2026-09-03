@@ -14,7 +14,16 @@ from sqlalchemy.orm import Session
 
 from auth import current_user, resolve_mine_id
 from db import get_db
-from models import Alert, Evidence, Mine, Obligation, RiskScore, SensorReading, User
+from models import (
+    Alert,
+    Evidence,
+    Mine,
+    Obligation,
+    RiskScore,
+    SensorReading,
+    Statute,
+    User,
+)
 from schemas import FeatureContribution, RiskOut
 from services import risk_model
 from services.hazard import threshold_for
@@ -33,8 +42,27 @@ def _require_model() -> None:
         )
 
 
-def _hazard_ratio(db: Session, mine_id: int) -> float:
-    """Worst recent reading as a fraction of its threshold. 1.0 = at the line."""
+# How long a duty of each cadence may go uninspected before it is worrying.
+# Used when a duty has NO evidence at all: "never inspected" means something
+# very different for a daily check than for an annual return, and treating both
+# as a flat 60 days made the feature a constant that lifted every score
+# equally instead of separating them.
+CADENCE_DAYS = {
+    "continuous": 1, "daily": 1, "4x_weekly": 2, "weekly": 7,
+    "fortnightly": 14, "monthly": 30, "quarterly": 91,
+    "half_yearly": 182, "annual": 365, "event_driven": 30, "one_time": 365,
+}
+
+
+def _hazard_by_clause(db: Session, mine_id: int) -> dict[str, float]:
+    """Worst recent reading per sensor, as a fraction of its threshold, keyed by
+    the CLAUSE that sensor protects.
+
+    Per clause, not per mine. A methane excursion threatens the ventilation
+    duty under Reg. 46; it says nothing about the overtime register. Applying
+    one mine-wide hazard number to all 42 duties was both wrong and the main
+    reason every score landed in the seventies.
+    """
     since = datetime.now(UTC) - timedelta(hours=6)
     rows = db.execute(
         select(SensorReading.sensor_type, func.max(SensorReading.value))
@@ -42,24 +70,39 @@ def _hazard_ratio(db: Session, mine_id: int) -> float:
         .group_by(SensorReading.sensor_type)
     ).all()
 
-    worst = 0.0
+    by_clause: dict[str, float] = {}
     for sensor_type, peak in rows:
         cfg = threshold_for(sensor_type)
-        if cfg and cfg["threshold"]:
-            worst = max(worst, float(peak) / float(cfg["threshold"]))
-    return round(worst, 3)
+        if not cfg or not cfg.get("threshold"):
+            continue
+        ratio = float(peak) / float(cfg["threshold"])
+        ref = cfg["clause_ref"]
+        by_clause[ref] = max(by_clause.get(ref, 0.0), round(ratio, 3))
+    return by_clause
 
 
-def _features_for(db: Session, ob: Obligation, mine: Mine, hazard: float) -> dict:
+def _features_for(
+    db: Session,
+    ob: Obligation,
+    mine: Mine,
+    hazard_by_clause: dict[str, float],
+    clause_ref: str,
+) -> dict:
     today = date.today()
     days_overdue = (today - ob.due_date).days if ob.due_date else 0
 
     last_ev = db.scalar(
         select(func.max(Evidence.captured_at)).where(Evidence.obligation_id == ob.id)
     )
-    days_since = (
-        (datetime.now(UTC) - last_ev).days if last_ev else 60
-    )
+    if last_ev:
+        days_since = (datetime.now(UTC) - last_ev).days
+    else:
+        # Never inspected. Express that against the duty's own cadence rather
+        # than a flat constant: two cadence periods of silence.
+        days_since = CADENCE_DAYS.get(ob.frequency, 30) * 2
+
+    # Only the duties governed by a breaching sensor carry its hazard.
+    hazard = hazard_by_clause.get(clause_ref, 0.0)
 
     violations = db.scalar(
         select(func.count(Alert.id)).where(
@@ -86,15 +129,18 @@ def recompute(
     _require_model()
     mine_id_r = resolve_mine_id(user, mine_id)
     mine = db.get(Mine, mine_id_r)
-    hazard = _hazard_ratio(db, mine_id_r)
+    hazard_by_clause = _hazard_by_clause(db, mine_id_r)
 
-    obligations = db.scalars(
-        select(Obligation).where(Obligation.mine_id == mine_id_r)
+    rows = db.execute(
+        select(Obligation, Statute.clause_ref)
+        .join(Statute, Statute.id == Obligation.statute_id)
+        .where(Obligation.mine_id == mine_id_r)
     ).all()
+    obligations = [ob for ob, _ in rows]
 
     now = datetime.now(UTC)
-    for ob in obligations:
-        feats = _features_for(db, ob, mine, hazard)
+    for ob, clause_ref in rows:
+        feats = _features_for(db, ob, mine, hazard_by_clause, clause_ref)
         result = risk_model.predict(feats)
         db.add(
             RiskScore(
