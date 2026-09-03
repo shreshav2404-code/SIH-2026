@@ -205,3 +205,51 @@ touches the network.
 > Do not reach for `npm install expo-build-properties` to make this survive
 > `expo prebuild`. Installing anything rewrites `node_modules` and erases the
 > `react-native-litert-lm` patches in sections 4 and 5. Re-apply this by hand.
+
+---
+
+## 7. `npm install` erases the patches in sections 4 and 5
+
+Adding any package rewrites `node_modules`, and both LiteRT-LM edits live
+there. Back them up first, install, then verify:
+
+```bash
+cp node_modules/react-native-litert-lm/android/CMakeLists.txt /tmp/
+cp node_modules/react-native-litert-lm/android/build.gradle   /tmp/
+
+npx expo install <package>
+
+grep -c "unresolved-symbols=ignore-all" node_modules/react-native-litert-lm/android/CMakeLists.txt
+grep -c "abiFilters 'arm64-v8a'"        node_modules/react-native-litert-lm/android/build.gradle
+```
+
+Both must be non-zero. They survived the `expo-sensors` / `expo-audio` install,
+but that is luck rather than a guarantee — npm may re-extract a package for
+reasons of its own.
+
+## 8. New native modules need a rebuild, not just a Metro reload
+
+`expo-sensors` and `expo-audio` are native. An APK built before they were added
+does not contain them, and importing one throws at **module load** — the same
+class of failure as section 4, and it takes the whole app down before React
+renders.
+
+`src/components/TabBoundary.tsx` now contains that blast radius: the Ask and
+Sensors tabs are wrapped, so an older build shows an explanation in the tab
+instead of refusing to open. That is a safety net, not a substitute — those
+tabs only work after a native rebuild.
+
+## 9. Both models ship, so the APK is ~3.5 GB
+
+`models/` must contain **exactly** the two files listed in `expectedModels` in
+`app/build.gradle`, which mirrors `MODELS` in `src/lib/modelSource.ts`:
+
+```
+Qwen3-1.7B_dynamic_wi4b32_afp32.litertlm     977,184,032 bytes
+gemma-4-E2B-it.litertlm                    2,588,147,712 bytes
+```
+
+Gradle fails the build if one is missing (a model the app cannot find at
+runtime) or if an extra one is present (the whole directory is an asset source,
+so a stray file silently inflates the APK). Spare weights live in
+`models-archive/`, which is outside the asset path and gitignored.
