@@ -2,6 +2,7 @@ import axios from "axios";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
+import mineBg from "../assets/mine-bg.png";
 import { API_BASE } from "../api/client";
 import { useAuth } from "../lib/auth";
 
@@ -53,11 +54,19 @@ export default function Login() {
   }
 
   return (
-    <div className="grid min-h-full place-items-center px-4">
+    // Generated artwork, not a stock photograph - see tools/make_art.py. A
+    // government-facing tool should be able to account for the provenance of
+    // every asset it ships.
+    <div
+      className="grid min-h-full place-items-center bg-cover bg-center px-4"
+      style={{ backgroundImage: `url(${mineBg})` }}
+    >
       <div className="w-full max-w-sm">
         <div className="mb-6 text-center">
-          <h1 className="text-2xl font-semibold tracking-tight">ANUPALAN</h1>
-          <p className="mt-1 text-sm text-[var(--ink-soft)]">
+          <h1 className="text-2xl font-semibold tracking-tight text-white">
+            ANUPALAN
+          </h1>
+          <p className="mt-1 text-sm text-slate-300">
             Compliance monitoring · Coal India
           </p>
         </div>

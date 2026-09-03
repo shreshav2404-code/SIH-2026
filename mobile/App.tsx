@@ -11,6 +11,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   BackHandler,
+  ImageBackground,
   StyleSheet,
   Text,
   TextInput,
@@ -242,12 +243,19 @@ function Login({ onSignedIn }: { onSignedIn: (u: User) => void }) {
   }
 
   return (
-    <View style={[s.app, s.centre]}>
-      <StatusBar style="dark" />
-      <Text style={s.brand}>ANUPALAN</Text>
-      <Text style={s.dim}>Field inspection · Coal India</Text>
+    // Generated artwork, not a stock photograph - see tools/make_art.py.
+    // A government-facing tool should be able to account for the
+    // provenance of every asset it ships.
+    <ImageBackground
+      source={require("./assets/mine-bg.png")}
+      style={[s.app, s.centre]}
+      resizeMode="cover"
+    >
+      <StatusBar style="light" />
+      <Text style={s.brandOnArt}>ANUPALAN</Text>
+      <Text style={s.dimOnArt}>Field inspection · Coal India</Text>
 
-      <View style={s.form}>
+      <View style={s.formCard}>
         <TextInput
           style={s.input}
           value={username}
@@ -291,7 +299,7 @@ function Login({ onSignedIn }: { onSignedIn: (u: User) => void }) {
           <Text style={s.primaryText}>{busy ? "Signing in…" : "Sign in"}</Text>
         </TouchableOpacity>
       </View>
-    </View>
+    </ImageBackground>
   );
 }
 
@@ -323,6 +331,15 @@ const s = StyleSheet.create({
   brand: { fontSize: 28, fontWeight: "700", color: C.ink, letterSpacing: 1 },
   dim: { color: C.inkSoft, fontSize: 13, marginTop: 4 },
   form: { alignSelf: "stretch", marginTop: 28 },
+
+  // Sign-in over the artwork. The form sits on an opaque card so the inputs
+  // keep full contrast whatever is behind them.
+  brandOnArt: { fontSize: 28, fontWeight: "700", color: "#fff", letterSpacing: 1 },
+  dimOnArt: { color: "#c8d6e4", fontSize: 13, marginTop: 4 },
+  formCard: {
+    alignSelf: "stretch", marginTop: 28, backgroundColor: C.panel,
+    borderRadius: 12, padding: 16,
+  },
   input: {
     backgroundColor: C.panel, borderWidth: 1, borderColor: C.line,
     borderRadius: 8, padding: 12, marginBottom: 10, color: C.ink,
