@@ -223,6 +223,20 @@
       "unit": "ug/m3",
       "clause_ref": "CPCB · CAAQMS uptime",
       "severity": "warning"
+    },
+    "noise": {
+      "threshold": 90.0,
+      "unit": "dB",
+      "clause_ref": null,
+      "severity": "warning",
+      "_note": "Measured by the handset microphone. 90 dB is the conventional occupational action level, NOT a citation - this corpus has no noise clause, so nothing here claims one. Add the DGMS reference from the domain brief to make it a compliance signal."
+    },
+    "illumination": {
+      "threshold": 50.0,
+      "unit": "lux",
+      "clause_ref": null,
+      "severity": "warning",
+      "_note": "Ambient light from the handset sensor. Breach is LOW light, so the generic over-threshold rule does not apply; treated as monitoring only until a lighting clause is added."
     }
   }
 }

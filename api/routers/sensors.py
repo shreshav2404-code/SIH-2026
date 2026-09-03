@@ -104,12 +104,29 @@ def ingest(body: ReadingsIn, db: Session = Depends(get_db)) -> dict:
         if stats.get("reason") == "rising":
             severity = "warning"
 
+        # A sensor with no clause behind it is MONITORING, not compliance.
+        #
+        # The handset's microphone and light sensor produce real numbers, but
+        # this corpus contains no noise or lighting clause, so there is nothing
+        # to cite. Alert.obligation_id is, in this model's own words, "what
+        # makes this a compliance alert rather than a generic sensor
+        # dashboard" - so an alert with no clause must not borrow the language
+        # of one. It is downgraded to "info" and says plainly what it is.
+        # Inventing a regulation number to dress it up is precisely the failure
+        # this system exists to prevent.
+        monitoring_only = not clause_ref
+        if monitoring_only:
+            severity = "info"
+
         alert = Alert(
             mine_id=mine_id,
             obligation_id=_obligation_for_clause(db, mine_id, clause_ref),
             clause_ref=clause_ref,
             severity=severity,
-            message=alert_message(sensor_type, stats, rows[-1].unit),
+            message=(
+                alert_message(sensor_type, stats, rows[-1].unit)
+                + (" Monitoring only - no clause in the corpus covers this reading." if monitoring_only else "")
+            ),
             source="rule",
         )
         db.add(alert)

@@ -43,7 +43,8 @@
         {
           "locationAlwaysAndWhenInUsePermission": "ANUPALAN records where evidence was captured, so a photo can be checked against the lease boundary."
         }
-      ]
+      ],
+      "expo-audio"
     ]
   }
 }

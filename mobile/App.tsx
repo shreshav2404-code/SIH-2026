@@ -26,10 +26,12 @@ import {
   me,
   ping,
   saveServerUrl,
+  transport,
   type Duty,
   type User,
 } from "./src/lib/api";
 import { LAN_HOST } from "./src/lib/config";
+import { describeTransport } from "./src/lib/discovery";
 import { counts } from "./src/lib/db";
 import Ask from "./src/screens/Ask";
 import Capture from "./src/screens/Capture";
@@ -213,7 +215,10 @@ function Login({ onSignedIn }: { onSignedIn: (u: User) => void }) {
 
       if (status === 401) setError("Incorrect username or password.");
       else if (status === undefined)
-        setError(`Cannot reach the API at ${server}. Check the address below.`);
+        setError(
+          "Cannot reach the API. Tried the cable, the phone's hotspot and " +
+            "wifi. Start the backend, or set the address below by hand.",
+        );
       else if (status >= 500)
         setError(`API error ${status} — the server is up but failing.`);
       else setError(`Sign-in failed (HTTP ${status}).`);
@@ -257,7 +262,10 @@ function Login({ onSignedIn }: { onSignedIn: (u: User) => void }) {
           />
         ) : (
           <TouchableOpacity onPress={() => setEditingServer(true)}>
-            <Text style={s.serverLine}>Server: {server} · change</Text>
+            <Text style={s.serverLine}>
+              Server: {server}
+              {transport ? ` · ${describeTransport(transport)}` : ""} · change
+            </Text>
           </TouchableOpacity>
         )}
 

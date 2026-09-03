@@ -2,6 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 
 import { API_BASE } from "./config";
+import { discover, type Discovered } from "./discovery";
 
 export const api = axios.create({ baseURL: API_BASE, timeout: 15000 });
 
@@ -17,11 +18,50 @@ const SERVER_KEY = "anupalan.server";
  * repackages 3.66 GB of model, so the compiled value in config.ts is only the
  * default - whatever is saved here wins.
  */
+/** How the API was reached last time discovery ran. Null until it has. */
+export let transport: Discovered["via"] | null = null;
+
+/**
+ * Work out where the API is, and prefer not to ask the user.
+ *
+ * The saved address is tried first because it is usually still right. If it is
+ * dead - cable pulled, laptop moved network, DHCP reshuffled - every transport
+ * is probed in parallel and the first that answers wins. The same build then
+ * works cabled, on the phone hotspot, or on shared wifi, with nothing typed
+ * and nothing rebuilt.
+ */
 export async function loadServerUrl(): Promise<string> {
-  const saved = await AsyncStorage.getItem(SERVER_KEY);
-  const url = saved?.trim() || API_BASE;
-  api.defaults.baseURL = url;
-  return url;
+  const saved = (await AsyncStorage.getItem(SERVER_KEY))?.trim() || null;
+
+  const found = await discover(saved);
+  if (found) {
+    api.defaults.baseURL = found.url;
+    transport = found.via;
+    if (found.url !== saved) await AsyncStorage.setItem(SERVER_KEY, found.url);
+    return found.url;
+  }
+
+  // Nothing answered. Keep the saved value so the Server field shows what was
+  // last tried, rather than resetting to a compiled default that is no better.
+  const fallback = saved || API_BASE;
+  api.defaults.baseURL = fallback;
+  transport = null;
+  return fallback;
+}
+
+/**
+ * Re-run discovery after a request failed for want of a connection.
+ *
+ * So unplugging the cable mid-demo fails over to the hotspot on the next
+ * request instead of stranding the app.
+ */
+export async function rediscover(): Promise<string | null> {
+  const found = await discover(null);
+  if (!found) return null;
+  api.defaults.baseURL = found.url;
+  transport = found.via;
+  await AsyncStorage.setItem(SERVER_KEY, found.url);
+  return found.url;
 }
 
 export async function saveServerUrl(url: string): Promise<string> {
@@ -52,6 +92,34 @@ api.interceptors.request.use((config) => {
   if (cachedToken) config.headers.Authorization = `Bearer ${cachedToken}`;
   return config;
 });
+
+/**
+ * A request that failed for want of a connection gets ONE more try, through a
+ * fresh discovery pass.
+ *
+ * This is what makes the cable optional in practice rather than in theory:
+ * pull it mid-demo and the next request finds the hotspot instead of the app
+ * simply going dead. `_retried` guards it - without the flag, a laptop that is
+ * genuinely off would have every request retrying discovery forever.
+ *
+ * Only connection failures qualify. A 401 or a 500 means we reached the right
+ * server and must not go looking for a different one.
+ */
+api.interceptors.response.use(
+  (r) => r,
+  async (error) => {
+    const cfg = error?.config as (typeof error.config & { _retried?: boolean }) | undefined;
+    const noResponse = !error?.response;
+    if (!cfg || cfg._retried || !noResponse) throw error;
+
+    cfg._retried = true;
+    const found = await rediscover();
+    if (!found) throw error;
+
+    cfg.baseURL = found;
+    return api.request(cfg);
+  },
+);
 
 export interface User {
   id: number;
