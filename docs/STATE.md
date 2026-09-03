@@ -54,18 +54,43 @@ The on-device model. `LiteRTLMPackage` refuses x86_64 at runtime and Emulator
 The Ask tab detects the model (3.66 GB, "installed in app storage") and fails
 with a clear explanation rather than crashing.
 
+## The release APK on a physical phone (3 Sep)
+
+A 3.82 GB release APK with the model inside it is built and installed on a
+Galaxy M31s. Two defects that **only exist in a release build** were found and
+fixed; both need a rebuild before they take effect.
+
+1. **Cleartext HTTP was blocked.** `expo prebuild` writes
+   `usesCleartextTraffic` into the *debug* manifest only, so the release APK
+   was refused every request by the platform while `adb reverse` and the API
+   were both healthy. It surfaced as "cannot reach the API" and looked like a
+   network fault. Confirmed by dumping the built APK's manifest with `aapt2`.
+   See `ANDROID_BUILD.md` §6.
+2. **The model-load ladder dead-ended.** It branched once and stopped, so the
+   M31s - whose Exynos 9611 exposes no OpenCL - failed GPU for a non-memory
+   reason, fell to cpu/4096, and was refused for being ~62 MB short with no
+   rung left. Now a real ladder, gpu/4096 down to cpu/1024.
+
+The API host is no longer compiled in: the sign-in screen has a Server field.
+The laptop's IP had already drifted from `.36` to `.101`, and each such change
+otherwise cost a rebuild that repackages 3.66 GB.
+
+Both changes are verified on the emulator against live Metro - Login renders
+the Server line and signs in over the LAN IP - but **whether Gemma 4 E4B
+actually loads on the M31s is still open**, and needs the rebuilt APK.
+
 ## Next, in order
 
-1. **Demo dataset.** Every duty scores 92-98, which is flat for a
-   "which duty fails next" story. Give it spread.
+1. **Rebuild the release APK** in Android Studio (`:app` Active ABI must be
+   `arm64-v8a`, variant `release`), install it, and load the model on the
+   phone. This is the one open question in the whole build.
 2. **Evidence thumbnails** on the dashboard - capture works, the photo and
    chain hash should be visible where a regulator would look.
 3. **OBS recording** of all five moments, per the build plan's insurance.
-4. Ship an APK for other phones (`-PbundleModel=true` bundles the model).
 
 ## Read these before changing anything
 
-- `docs/ANDROID_BUILD.md` - the four fixes that make the Android build work.
+- `docs/ANDROID_BUILD.md` - the six fixes that make the Android build work.
   `mobile/android/` is gitignored, so `expo prebuild --clean` wipes all of them.
 - `docs/API_CONTRACT.md` - endpoint shapes, frozen unless all tracks agree.
 - `docs/PROGRESS.md` - milestones and the decisions worth remembering.
