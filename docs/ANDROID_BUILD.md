@@ -102,27 +102,32 @@ FATAL | Avd's CPU Architecture 'arm64' is not supported by the QEMU2
 
 There is no flag or workaround. On an Intel laptop, arm64 emulation is gone.
 
-### The workaround: build the model for x86_64
+### Do NOT widen abiFilters to x86_64 — it was tried, twice over
 
-`react-native-litert-lm/android/build.gradle` declares `abiFilters 'arm64-v8a'`,
-but that is the **wrapper's** restriction. The engine AAR
-(`litertlm-android-0.15.0.aar`) ships **both** `arm64-v8a` and `x86_64`.
-Widening the filter to
+`react-native-litert-lm/android/build.gradle` declares `abiFilters 'arm64-v8a'`.
+The engine AAR (`litertlm-android-0.15.0.aar`) does ship **both** `arm64-v8a`
+and `x86_64`, so widening the filter looks tempting. It fails at both levels:
 
-```gradle
-abiFilters 'arm64-v8a', 'x86_64'
+**1. It does not work at runtime.** The x86_64 library lands in the APK
+(`lib/x86_64/liblitertlm_jni.so`, 24 MB) but the Kotlin layer declines to use
+it:
+
+```
+W LiteRTLMPackage: Skipping LiteRTLM native init on unsupported primary ABI: x86_64
 ```
 
-produces `lib/x86_64/liblitertlm_jni.so` (24.1 MB) in the APK, so the model
-has a chance of loading in an ordinary x86_64 emulator.
+**2. It breaks the release build.** A debug build only compiles `arm64-v8a`, so
+this stays hidden. A **release** build compiles x86_64 too, and the x86_64 link
+fails outright:
 
-**This edit is in `node_modules` and `npm install` erases it.** Reapply it at
-`node_modules/react-native-litert-lm/android/build.gradle`.
+```
+ld.lld: error: undefined symbol: margelo::nitro::JHybrid...
+  referenced by JHybridLiteRTLMSpec.cpp:80
+  referenced by JHybridModelStoreSpec.cpp:26
+```
 
-**Unverified caveat:** the APK gets `lib/arm64-v8a/libLiteRTLM.so` but no
-x86_64 equivalent. The x86_64 JNI is 24.1 MB against arm64's 20.2 MB, which
-suggests the engine is statically linked there — but that is inference. Only
-loading a model on an x86_64 emulator proves it.
+Leave it at `arm64-v8a`. **The model needs a physical arm64 Android phone**;
+there is no emulator route to it on an Intel host.
 
 ## 5. AVD sizing (applies to whichever ABI)
 
