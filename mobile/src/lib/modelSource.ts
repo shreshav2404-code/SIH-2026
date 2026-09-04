@@ -17,7 +17,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { File, Paths } from "expo-file-system";
 
-export type ModelId = "e2b" | "lfm25" | "smol360";
+export type ModelId = "e2b" | "lfm25";
 
 /**
  * How a model's chat template handles reasoning.
@@ -89,26 +89,38 @@ export interface ModelSpec {
 }
 
 /**
- * The models shipped inside the APK, largest first.
+ * The two models shipped inside the APK.
  *
- * Every one has had its chat template extracted from the .litertlm bundle and
- * read, because that is what caught the failure that wasted a build: Qwen3-1.7B
- * loaded perfectly on GPU/4096 and then answered a ledger question by saying
- * the question was unclear. Its template ended with
+ * One does the hard work, one answers quickly. That split is deliberate: a
+ * single model at this size is either slow enough to hurt a live demo or weak
+ * enough to get statute wrong, and getting statute wrong is the failure this
+ * whole system exists to prevent.
+ *
+ * E2B is the only one measured answering correctly on this hardware - GPU/4096,
+ * real clause references, citations that verify against the corpus - and the
+ * only one that can hear speech or read a photograph. LFM2.5 is 1.2B rather
+ * than a few hundred million, so it has enough capability to be worth asking,
+ * and it is built for phone hardware rather than scaled down from a server.
+ *
+ * Every model here has had its chat template extracted from the .litertlm
+ * bundle and READ, because that is what caught the failure that wasted a
+ * build: Qwen3-1.7B loaded perfectly on GPU/4096 and then answered a ledger
+ * question by saying the question was unclear. Its template ended with
  *
  *     {%- if not enable_thinking|default(true) %}{{- '<think>...</think>' }}
  *
- * so reasoning was ON unless something turned it off, and nothing in this
- * runtime can: ThinkingOptions is documented for Gemma 4 only, `enable_thinking`
- * is a render-time variable we cannot set, and the bundle carried no /no_think
- * switch. It was dropped rather than shipped with a warning label.
+ * so reasoning was on unless something turned it off, and nothing in this
+ * runtime can. Marker-counting is not enough either: LFM2.5 mentions </think>
+ * inside a clause that STRIPS reasoning from past messages, which a naive
+ * check reports as a reasoning model.
  *
- * The three text models below were checked the same way and end cleanly at
- * `<|im_start|>assistant`. LFM2.5 does mention </think>, but in a clause that
- * STRIPS reasoning out of past messages - the opposite of enabling it.
+ * SIZE IS A HARD CEILING. An APK is a ZIP32 archive and cannot exceed 4 GiB,
+ * so the weights must stay under about 3.7 GB. E2B takes 2.41 of that, which
+ * caps the second model at roughly 1.35 GB - the reason Qwen2.5 1.5B is
+ * verified, kept in models-archive/, and not shipped.
  *
- * Only ever ONE is resident. Peak memory is whatever the largest one needs,
- * not the sum - and switching between them mid-session does not work, see
+ * Only ever ONE is resident. Peak memory is whatever the larger needs, not the
+ * sum - and switching between them mid-session does not work, see
  * switchModel() in llm.ts.
  */
 export const MODELS: ModelSpec[] = [
@@ -128,16 +140,7 @@ export const MODELS: ModelSpec[] = [
     approxBytes: 736_015_744,
     multimodal: false,
     thinking: "none",
-    blurb: "Built for phones · quick · text only",
-  },
-  {
-    id: "smol360",
-    filename: "SmolLM2_360M_instruct.litertlm",
-    label: "SmolLM2 360M",
-    approxBytes: 373_719_040,
-    multimodal: false,
-    thinking: "none",
-    blurb: "Fastest · light chat only, not for clause work",
+    blurb: "Fast chat · text only · built for phones",
   },
 ];
 
