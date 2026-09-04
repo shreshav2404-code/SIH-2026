@@ -710,7 +710,16 @@ export interface LedgerAnswer {
  * year. Matches "Mines Act 1952" and "Mines Rules 1955" - and "Mines Rules
  * 1555", which is the point.
  */
-const STATUTE_RE = /((?:[A-Z][A-Za-z.]*\s+){1,4}\d{4})/g;
+/**
+ * Kept as a SOURCE STRING, not a shared RegExp object.
+ *
+ * A module-level /g regex carries `lastIndex`, and two matchAll() calls
+ * against the same object left the second starting where the first
+ * finished - so an answer citing six clauses was counted as citing none
+ * and captioned "NOT grounded". Measured on the device with E4B. A fresh
+ * regex per call cannot do that.
+ */
+const STATUTE_SRC = "((?:[A-Z][A-Za-z.]*\\s+){1,4}\\d{4})";
 
 /**
  * Check the model's citations against the ledger it was handed.
@@ -725,19 +734,29 @@ const STATUTE_RE = /((?:[A-Z][A-Za-z.]*\s+){1,4}\d{4})/g;
  * code does safety-critical work. A statutory citation in a compliance record
  * is safety-critical, so it is verified here rather than requested politely.
  */
-export function unverifiedCitations(answer: string, facts: LedgerFact[]): string[] {
-  // Check against what the model was actually shown. clause_ref carries the
-  // act inside it, so a statute-shaped phrase is verified if it appears in ANY
-  // supplied reference - matching on `act` alone missed references the model
-  // had every right to use.
+export function auditCitations(
+  answer: string,
+  facts: LedgerFact[],
+): { unverified: string[]; cited: number } {
+  // One pass, one fresh regex. Counting and checking used to be two separate
+  // matchAll() calls over a shared /g object, which is how a six-citation
+  // answer was reported as citing nothing.
+  //
+  // Checked against what the model was actually SHOWN: clause_ref carries the
+  // act inside it, so a statute-shaped phrase is verified if it appears in any
+  // supplied reference. Matching on `act` alone missed references the model had
+  // every right to use.
   const allowed = facts.map((f) => `${f.clause_ref} ${f.act}`.toLowerCase());
   const bad = new Set<string>();
-  for (const m of answer.matchAll(STATUTE_RE)) {
-    const cited = m[1].trim();
-    const needle = cited.toLowerCase();
-    if (!allowed.some((ref) => ref.includes(needle))) bad.add(cited);
+  let cited = 0;
+
+  for (const m of answer.matchAll(new RegExp(STATUTE_SRC, "g"))) {
+    cited += 1;
+    const ref = m[1].trim();
+    const needle = ref.toLowerCase();
+    if (!allowed.some((a) => a.includes(needle))) bad.add(ref);
   }
-  return [...bad];
+  return { unverified: [...bad], cited };
 }
 
 export async function askLedger(
@@ -791,7 +810,6 @@ state a statute or regulation number that is not listed above.`),
     messageOptions(),
   );
 
-  const unverified = unverifiedCitations(answer, facts);
-  const cited = [...answer.matchAll(STATUTE_RE)].length;
+  const { unverified, cited } = auditCitations(answer, facts);
   return { answer, unverified, cited };
 }
