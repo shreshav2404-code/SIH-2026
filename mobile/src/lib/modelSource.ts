@@ -17,7 +17,20 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { File, Paths } from "expo-file-system";
 
-export type ModelId = "e2b" | "qwen17";
+export type ModelId = "e2b" | "qwen25" | "lfm25" | "smol360";
+
+/**
+ * How a model's chat template handles reasoning.
+ *
+ * Carried as DATA rather than branched on by id, because every model added so
+ * far has needed a different answer and the code was starting to accumulate
+ * `id === "qwen17"` checks. A new model should be describable, not coded for.
+ *
+ *   "none"      the template never opens a reasoning block. Nothing to do.
+ *   "no-think"  the template honours a `/no_think` marker in the message.
+ *   "config"    the engine's ThinkingOptions reaches it (Gemma 4 family).
+ */
+export type ThinkingControl = "none" | "no-think" | "config";
 
 export interface ModelSpec {
   id: ModelId;
@@ -32,55 +45,76 @@ export interface ModelSpec {
    * have judged a good file incomplete and re-extracted it forever.
    */
   approxBytes: number;
-  /** Audio and image input. Only E2B has it; the Qwen build is text-only. */
+  /** Audio and image input. Only E2B has it; the rest are text-only. */
   multimodal: boolean;
+  /** See ThinkingControl. Verified by reading each bundle's chat template. */
+  thinking: ThinkingControl;
   /** One line under the label in the picker. */
   blurb: string;
 }
 
 /**
- * The models shipped inside the APK.
+ * The models shipped inside the APK, largest first.
  *
- * E2B is the default because it is the one that works. Qwen3-1.7B was chosen
- * first on paper - a third of the size, trained for instruction-following -
- * and then failed on the device: it answers a ledger question by saying the
- * question is unclear. Paper reasoning lost to a measurement, which is the
- * right way round.
+ * Every one has had its chat template extracted from the .litertlm bundle and
+ * read, because that is what caught the failure that wasted a build: Qwen3-1.7B
+ * loaded perfectly on GPU/4096 and then answered a ledger question by saying
+ * the question was unclear. Its template ended with
  *
- * Only ever ONE is resident. Peak memory is whatever the larger one needs,
+ *     {%- if not enable_thinking|default(true) %}{{- '<think>...</think>' }}
+ *
+ * so reasoning was ON unless something turned it off, and nothing in this
+ * runtime can: ThinkingOptions is documented for Gemma 4 only, `enable_thinking`
+ * is a render-time variable we cannot set, and the bundle carried no /no_think
+ * switch. It was dropped rather than shipped with a warning label.
+ *
+ * The three text models below were checked the same way and end cleanly at
+ * `<|im_start|>assistant`. LFM2.5 does mention </think>, but in a clause that
+ * STRIPS reasoning out of past messages - the opposite of enabling it.
+ *
+ * Only ever ONE is resident. Peak memory is whatever the largest one needs,
  * not the sum - and switching between them mid-session does not work, see
  * switchModel() in llm.ts.
  */
 export const MODELS: ModelSpec[] = [
-  {
-    id: "qwen17",
-    filename: "Qwen3-1.7B_dynamic_wi4b32_afp32.litertlm",
-    label: "Qwen3 1.7B",
-    approxBytes: 977_184_032,
-    multimodal: false,
-    // Measured on the M31s and it does not work: asked "what is overdue and
-    // who owns it?", it replied "It seems like you're mixing up some phrases"
-    // and rambled past the word limit. It loads fine on GPU/4096 and is fast,
-    // so the fault is almost certainly the chat template not being applied by
-    // this .litertlm conversion, not the weights. Kept because it is a third
-    // of E2B's size and worth revisiting, but it must not be the default.
-    blurb: "Fast, but currently unreliable · text only",
-  },
   {
     id: "e2b",
     filename: "gemma-4-E2B-it.litertlm",
     label: "Gemma 4 E2B",
     approxBytes: 2_588_147_712,
     multimodal: true,
+    thinking: "config",
     blurb: "Recommended · understands speech and photos",
+  },
+  {
+    id: "qwen25",
+    filename: "Qwen2.5-1.5B-Instruct_q8.litertlm",
+    label: "Qwen2.5 1.5B",
+    approxBytes: 1_599_229_952,
+    multimodal: false,
+    thinking: "none",
+    blurb: "Strong at instructions · int8 · text only",
+  },
+  {
+    id: "lfm25",
+    filename: "LFM2.5-1.2B-Instruct_int4.litertlm",
+    label: "LFM2.5 1.2B",
+    approxBytes: 736_015_744,
+    multimodal: false,
+    thinking: "none",
+    blurb: "Built for phones · quick · text only",
+  },
+  {
+    id: "smol360",
+    filename: "SmolLM2_360M_instruct.litertlm",
+    label: "SmolLM2 360M",
+    approxBytes: 373_719_040,
+    multimodal: false,
+    thinking: "none",
+    blurb: "Fastest · light chat only, not for clause work",
   },
 ];
 
-/**
- * E2B, because it is the one that demonstrably answers correctly on this
- * hardware. Qwen3-1.7B is a third of the size and loads faster, and would be
- * the better default if its output were usable - see its blurb above.
- */
 export const DEFAULT_MODEL_ID: ModelId = "e2b";
 
 const PREF_KEY = "anupalan.model";

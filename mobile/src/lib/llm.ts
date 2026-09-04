@@ -122,15 +122,16 @@ let loadingSpec: ModelSpec | null = null;
 export type LoadState = "idle" | "loading" | "ready" | "error";
 
 /**
- * Qwen3 reads `/no_think` in the message itself and skips its reasoning block.
+ * A per-model marker that suppresses reasoning, where the template reads one.
  *
- * Belt and braces: LLMConfig.thinking is documented for "Gemma 4 models", so
- * it may never reach a Qwen conversation. This switch is part of Qwen's own
- * chat template, so it works wherever the template does.
+ * Driven by ModelSpec.thinking rather than by checking the model id. The id
+ * check was the start of a pile of special cases - every model added so far
+ * has wanted a different answer here - and a new model should be describable
+ * in the registry, not coded for in this file.
  */
 function thinkingSuffix(): string {
   if (thinkingEnabled) return "";
-  return activeSpec?.id === "qwen17" ? "\n/no_think" : "";
+  return activeSpec?.thinking === "no-think" ? "\n/no_think" : "";
 }
 
 function text(s: string): MultimodalPart[] {
