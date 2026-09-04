@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
-import { api } from "../api/client";
+import { api, openReport } from "../api/client";
 import type { StatutoryReturn } from "../api/types";
 import { useAuth } from "../lib/auth";
 import { Badge, Clause, Empty, Panel } from "../lib/ui";
@@ -51,15 +51,25 @@ export default function Returns() {
     <div className="grid gap-4 lg:grid-cols-[280px_1fr]">
       <Panel
         title="Returns"
-        right={
-          <button
-            onClick={() => draft.mutate()}
-            disabled={draft.isPending}
-            className="rounded bg-[var(--accent)] px-2 py-1 text-xs font-medium text-white disabled:opacity-60"
-          >
-            {draft.isPending ? "Drafting…" : "Draft EIA H1"}
-          </button>
-        }
+            right={
+              <div className="flex items-center gap-2">
+                {/* The return as the document it becomes - draft-stamped
+                    until signed. Nothing here files anything. */}
+                <button
+                  onClick={() => void openReport(`/reports/return/${current.id}`)}
+                  className="rounded border border-[var(--line)] px-2 py-1 text-xs font-medium hover:bg-slate-50"
+                >
+                  Print / PDF
+                </button>
+            <button
+              onClick={() => draft.mutate()}
+              disabled={draft.isPending}
+              className="rounded bg-[var(--accent)] px-2 py-1 text-xs font-medium text-white disabled:opacity-60"
+            >
+              {draft.isPending ? "Drafting…" : "Draft EIA H1"}
+            </button>
+              </div>
+            }
       >
         {items.length === 0 ? (
           <Empty>No returns yet.</Empty>

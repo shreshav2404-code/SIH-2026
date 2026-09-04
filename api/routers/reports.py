@@ -16,14 +16,14 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from html import escape
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import HTMLResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from auth import current_user, resolve_mine_id
 from db import get_db
-from models import Alert, Evidence, Mine, Obligation, Statute, User
+from models import Alert, Evidence, Mine, Obligation, Statute, StatutoryReturn, User
 from services.chain import verify_chain
 
 router = APIRouter(prefix="/reports", tags=["reports"])
@@ -166,6 +166,127 @@ def compliance_report(
     breaches were decided by arithmetic against a static table. No language
     model produced any part of this report, and nothing here has been filed
     with any authority — this is a draft for a qualified person to check.
+  </div>
+</body></html>"""
+
+    return HTMLResponse(html)
+
+
+@router.get("/return/{return_id}", response_class=HTMLResponse)
+def return_document(
+    return_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+) -> HTMLResponse:
+    """The statutory return itself, laid out as the document it will become.
+
+    A DRAFT, and it says so on its face in a way nobody can miss. The API
+    contract is explicit that this system never files anything: a return goes
+    to the DGMS because a certificated officer sent it, not because software
+    decided it was ready. An unsigned draft is watermarked; a signed one
+    carries the name and certificate number of the person who took
+    responsibility for it, which is the only thing that makes it a record.
+    """
+    ret = db.get(StatutoryReturn, return_id)
+    if not ret:
+        raise HTTPException(status_code=404, detail="no such return")
+    scoped = resolve_mine_id(user, ret.mine_id)
+    if ret.mine_id != scoped:
+        raise HTTPException(status_code=403, detail="not your mine")
+
+    mine = db.get(Mine, ret.mine_id)
+    name = mine.name if mine else f"Mine {ret.mine_id}"
+    draft = ret.draft_json or {}
+    sections = draft.get("sections") or []
+
+    # A return reads as numbered sections, each answering to the clauses it
+    # cites - which is the shape the drafter already produces (heading, body,
+    # citations). Rendering it as a flat table would throw away the citations,
+    # and the citations are the part that makes it a statutory document rather
+    # than a status summary.
+    def _section(i: int, sec: dict) -> str:
+        cites = sec.get("citations") or []
+        cite_html = " ".join(
+            f"<span class='clause'>{escape(str(c.get('clause_ref', '')))}</span>"
+            for c in cites
+        ) or "<span class='nocite'>no clause cited</span>"
+        return (
+            "<section class='sec'>"
+            f"<h3>{i}. {escape(str(sec.get('heading', '')))}</h3>"
+            f"<p>{escape(str(sec.get('body', '')))}</p>"
+            f"<div class='cites'>{cite_html}</div>"
+            "</section>"
+        )
+
+    body_rows = "".join(
+        _section(i, sec) for i, sec in enumerate(sections, start=1)
+    ) or "<p>No obligations in scope for this return.</p>"
+
+    if ret.signed_at:
+        signature = (
+            "<div class='signed'>"
+            f"<strong>Signed by {escape(ret.signature_name or 'unknown')}</strong><br>"
+            f"Certificate {escape(ret.certificate_no or '—')} · "
+            f"{ret.signed_at.strftime('%Y-%m-%d %H:%M')}"
+            "</div>"
+        )
+        stamp = ""
+    else:
+        signature = (
+            "<div class='unsigned'>"
+            "Unsigned. This return has no legal standing until a certificated "
+            "officer signs it."
+            "</div>"
+        )
+        stamp = "<div class='stamp'>DRAFT — NOT FILED</div>"
+
+    generated = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+
+    html = f"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<title>{escape(ret.return_type)} — {escape(name)}</title>
+<style>{CSS}
+.stamp {{
+  border: 3px solid var(--crit); color: var(--crit); font-weight: 700;
+  letter-spacing: .12em; padding: 8px 14px; display: inline-block;
+  transform: rotate(-3deg); margin: 8px 0 18px;
+}}
+.unsigned {{
+  border-left: 3px solid var(--crit); padding: 8px 12px; margin-top: 22px;
+  background: #fdecea; font-size: 12px;
+}}
+.signed {{
+  border-left: 3px solid var(--ok); padding: 8px 12px; margin-top: 22px;
+  background: #e6f4ec; font-size: 12px;
+}}
+.sec {{ margin: 0 0 16px; break-inside: avoid; }}
+.sec h3 {{ font-size: 13px; margin: 0 0 3px; }}
+.sec p {{ margin: 0 0 5px; font-size: 12px; }}
+.cites {{ display: flex; flex-wrap: wrap; gap: 8px; }}
+.nocite {{ font-size: 11px; color: var(--crit); font-style: italic; }}
+</style></head>
+<body>
+  <div class="noprint"><button onclick="window.print()">Print / Save as PDF</button></div>
+
+  <h1>{escape(ret.return_type.replace('_', ' ').title())}</h1>
+  <p class="sub">{escape(name)} · period {escape(ret.period)} · generated {generated}</p>
+
+  {stamp}
+
+  <h2>Position</h2>
+  {_row("Obligations covered", str(draft.get("obligations_covered", len(sections))))}
+  {_row("Evidence records cited", str(draft.get("evidence_count", 0)))}
+  {_row("Drafted", escape(str(draft.get("generated_at", "—"))[:19]))}
+
+  <h2>Obligations and evidence</h2>
+  {body_rows}
+
+  {signature}
+
+  <div class="foot">
+    Every row is drawn from the compliance ledger and cites the clause it
+    answers to. This document has NOT been submitted to any authority and this
+    system cannot submit it — filing is a deliberate act by a qualified person.
   </div>
 </body></html>"""
 
