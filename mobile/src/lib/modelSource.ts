@@ -17,7 +17,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { File, Paths } from "expo-file-system";
 
-export type ModelId = "e4b" | "lfm25";
+export type ModelId = "qwen25" | "falconR" | "lfm230";
 
 /**
  * How a model's chat template handles reasoning.
@@ -28,16 +28,10 @@ export type ModelId = "e4b" | "lfm25";
  *
  *   "none"      the template never opens a reasoning block. The toggle has
  *               nothing to switch and the model simply answers.
- *   "no-think"  the template honours a `/no_think` marker in the message, so
- *               the toggle works in both directions.
- *   "config"    the engine's ThinkingOptions reaches it (Gemma 4 family), so
- *               the toggle works in both directions.
+ *   "no-think"  the template honours a `/no_think` marker in the message.
+ *   "config"    the engine's ThinkingOptions reaches it (Gemma 4 family).
  *   "forced"    the model reasons and CANNOT be stopped from here - Qwen3 is
- *               the example: its template defaults enable_thinking to true,
- *               that is a render-time variable we cannot set, ThinkingOptions
- *               does not reach it, and the bundle has no /no_think switch.
- *               The toggle cannot turn this off, so the UI says so instead of
- *               quietly doing nothing.
+ *               the example. The toggle says so instead of doing nothing.
  */
 export type ThinkingControl = "none" | "no-think" | "config" | "forced";
 
@@ -45,8 +39,7 @@ export type ThinkingControl = "none" | "no-think" | "config" | "forced";
  * What the reasoning toggle will ACTUALLY do for this model.
  *
  * Returned as text for the UI, because a switch that silently does nothing on
- * some models is worse than one that explains itself. `wanted` is the toggle
- * position the officer has chosen.
+ * some models is worse than one that explains itself.
  */
 export function describeThinking(spec: ModelSpec, wanted: boolean): string {
   switch (spec.thinking) {
@@ -75,12 +68,15 @@ export interface ModelSpec {
   /**
    * Byte-exact size of the official file. Only a FALLBACK — `expectedBytes()`
    * prefers the bundled asset's own size, because a hand-maintained constant
-   * desynchronises the moment a model changes, and one already did: it still
-   * read 3,659,530,240 (E4B) after the switch to E2B, so every launch would
-   * have judged a good file incomplete and re-extracted it forever.
+   * desynchronises the moment a model changes, and one already did.
    */
   approxBytes: number;
-  /** Audio and image input. Only E4B has it; the rest are text-only. */
+  /**
+   * Audio and image input. None of the models in this build has it — the only
+   * multimodal option in LiteRT-LM is the Gemma 4 family, and E4B took 45
+   * seconds to load and 144 seconds to answer on this handset. See the note
+   * on MODELS below.
+   */
   multimodal: boolean;
   /** See ThinkingControl. Verified by reading each bundle's chat template. */
   thinking: ThinkingControl;
@@ -89,70 +85,77 @@ export interface ModelSpec {
 }
 
 /**
- * The two models shipped inside the APK.
+ * Three small models, and no large one. That is a deliberate retreat.
  *
- * One does the hard work, one answers quickly. That split is deliberate: a
- * single model at this size is either slow enough to hurt a live demo or weak
- * enough to get statute wrong, and getting statute wrong is the failure this
- * whole system exists to prevent.
+ * Gemma 4 E4B works on this phone - GPU/4096, 45 s to load, 3.3 GB resident,
+ * correct answers with real clause references. It is also 144 seconds to
+ * answer a ledger question, and a demo where the officer waits two and a half
+ * minutes is not a demo. E2B was no better: 115 s to load, 74 s to answer.
  *
- * E4B is the model this build plan specified from the start. It was dropped
- * once, when the generic 3.66 GB build was refused by the pre-flight memory
- * check for being ~62 MB short, and E2B stood in - E2B did answer correctly on
- * this hardware (GPU/4096, real clause references, citations verifying against
- * the corpus), which is why it was a sound fallback. The GPU variant used here
- * is 640 MB smaller than the build that failed, ten times that shortfall, and
- * matches the path the phone actually takes. LFM2.5 is 1.2B rather than a few
- * hundred million, so it has enough capability to be worth asking, and is
- * built for phone hardware rather than scaled down from a server.
+ * The Gemma family is the ONLY multimodal option in LiteRT-LM, so dropping it
+ * costs speech and photograph input outright - the spoken-Hindi moment goes
+ * with it. That is the price of the trade and it is worth stating plainly
+ * rather than discovering during a rehearsal. E4B is kept in models-archive/,
+ * ready to return on hardware that can carry it.
  *
  * Every model here has had its chat template extracted from the .litertlm
- * bundle and READ, because that is what caught the failure that wasted a
- * build: Qwen3-1.7B loaded perfectly on GPU/4096 and then answered a ledger
- * question by saying the question was unclear. Its template ended with
+ * bundle and READ. That is what caught Qwen3-1.7B, which loaded perfectly on
+ * GPU/4096 and then answered a ledger question by saying the question was
+ * unclear: its template ended with
  *
  *     {%- if not enable_thinking|default(true) %}{{- '<think>...</think>' }}
  *
  * so reasoning was on unless something turned it off, and nothing in this
- * runtime can. Marker-counting is not enough either: LFM2.5 mentions </think>
- * inside a clause that STRIPS reasoning from past messages, which a naive
- * check reports as a reasoning model.
+ * runtime can. Marker-counting is not enough either - LFM2.5 mentions
+ * </think> inside a clause that STRIPS reasoning from past messages, which a
+ * naive check reports as a reasoning model.
  *
- * SIZE IS A HARD CEILING. An APK is a ZIP32 archive and cannot exceed 4 GiB,
- * so the weights must stay under about 3.7 GB. E4B takes 2.97 of that, which
- * caps the second model at roughly 0.75 GB - the reason Qwen2.5 1.5B is
- * verified, kept in models-archive/, and not shipped.
- *
- * Only ever ONE is resident. Peak memory is whatever the larger needs, not the
- * sum - and switching between them mid-session does not work, see
- * switchModel() in llm.ts.
+ * Only ever ONE is resident, and switching between them mid-session does not
+ * work - see switchModel() in llm.ts.
  */
 export const MODELS: ModelSpec[] = [
   {
-    id: "e4b",
-    // The GPU build, not the generic one. 2.97 GB against 3.66, and the phone
-    // loads Gemma on the GPU path anyway - which is the whole reason E4B is
-    // back: the generic build was refused by the pre-flight memory check by
-    // 62 MB, and this variant is 640 MB smaller. Ten times the shortfall.
-    filename: "gemma-4-E4B-it-gpu.litertlm",
-    label: "Gemma 4 E4B",
-    approxBytes: 2_969_059_328,
-    multimodal: true,
-    thinking: "config",
-    blurb: "Best reasoning · speech and photos · can think first",
-  },
-  {
-    id: "lfm25",
-    filename: "LFM2.5-1.2B-Instruct_int4.litertlm",
-    label: "LFM2.5 1.2B",
-    approxBytes: 736_015_744,
+    id: "qwen25",
+    filename: "Qwen2.5-1.5B-Instruct_multi-prefill-seq_q8_ekv4096.litertlm",
+    label: "Qwen2.5 1.5B",
+    approxBytes: 1_597_931_520,
     multimodal: false,
     thinking: "none",
-    blurb: "Fast chat · text only · built for phones",
+    blurb: "Most capable here · int8 · text only",
+  },
+  {
+    id: "falconR",
+    filename: "Falcon-H1-Tiny-R-0.6B_int8.litertlm",
+    label: "Falcon-H1 0.6B R",
+    approxBytes: 873_254_788,
+    multimodal: false,
+    // The R is Reasoning: this model is TRAINED to reason, so it may show its
+    // working in the answer even though nothing forces it to. The template was
+    // read and ends cleanly at <|im_start|>assistant with no <think> injection,
+    // so it is not the Qwen3 trap - that one defaulted enable_thinking to true
+    // and could not be switched off from here. Watch the output anyway: a
+    // reasoning-tuned model can still ramble past a 150-token budget.
+    thinking: "none",
+    blurb: "Reasoning-tuned · int8 · may show its working",
+  },
+  {
+    id: "lfm230",
+    filename: "LFM2.5-230M_int4.litertlm",
+    label: "LFM2.5 230M",
+    approxBytes: 176_756_720,
+    multimodal: false,
+    thinking: "none",
+    blurb: "Smallest · instant · light chat only",
   },
 ];
 
-export const DEFAULT_MODEL_ID: ModelId = "e4b";
+
+/**
+ * The most capable of the three. Speed was the reason for dropping Gemma, but
+ * the smallest model here is explicitly not for clause work, so the default
+ * should still be the one that can do the job.
+ */
+export const DEFAULT_MODEL_ID: ModelId = "qwen25";
 
 const PREF_KEY = "anupalan.model";
 
