@@ -17,7 +17,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { File, Paths } from "expo-file-system";
 
-export type ModelId = "e2b" | "qwen25" | "lfm25" | "smol360";
+export type ModelId = "e2b" | "lfm25" | "smol360";
 
 /**
  * How a model's chat template handles reasoning.
@@ -120,15 +120,6 @@ export const MODELS: ModelSpec[] = [
     multimodal: true,
     thinking: "config",
     blurb: "Recommended · understands speech and photos",
-  },
-  {
-    id: "qwen25",
-    filename: "Qwen2.5-1.5B-Instruct_multi-prefill-seq_q8_ekv4096.litertlm",
-    label: "Qwen2.5 1.5B",
-    approxBytes: 1_597_931_520,
-    multimodal: false,
-    thinking: "none",
-    blurb: "Strong at instructions · int8 · text only",
   },
   {
     id: "lfm25",

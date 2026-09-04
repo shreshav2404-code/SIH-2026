@@ -253,3 +253,40 @@ Gradle fails the build if one is missing (a model the app cannot find at
 runtime) or if an extra one is present (the whole directory is an asset source,
 so a stray file silently inflates the APK). Spare weights live in
 `models-archive/`, which is outside the asset path and gitignored.
+
+---
+
+## 10. The APK cannot exceed 4 GiB — it is a ZIP32 archive
+
+Adding a fourth model (4.93 GB of weights) failed at `:app:packageRelease`:
+
+```
+Zip32 cannot place CD entry 'assets/index.android.bundle'
+payload at 5453573896 (MAX=4294967295)
+```
+
+MAX is 2^32 − 1. An APK is a ZIP32 archive and central-directory offsets are
+32-bit, so nothing beyond 4 GiB can be addressed. It is a container limit, not
+a memory or configuration one, and no Gradle setting lifts it.
+
+The message is misleading twice over: it names `index.android.bundle`, which is
+2 MB and entirely innocent — that file merely happens to be the entry that
+lands past the boundary — and it says nothing about size.
+
+**Budget.** Roughly 250 MB goes to code, native libraries and resources, so the
+weights must stay under about **3.7 GB**. Current set:
+
+```
+gemma-4-E2B-it.litertlm              2.41 GB
+LFM2.5-1.2B-Instruct_int4.litertlm   0.69 GB
+SmolLM2_360M_instruct.litertlm       0.35 GB
+                                     ------
+                                     3.44 GB  ->  APK ~3.69 GB
+```
+
+Qwen2.5-1.5B (1.49 GB) is verified and kept in `models-archive/`, but E2B plus
+Qwen2.5 alone is 3.90 GB and does not fit. Adding it means dropping E2B, which
+also means losing the only multimodal model — no speech, no photographs.
+
+**Do the arithmetic before building.** The package step takes about twelve
+minutes to reach the point where it fails.
