@@ -344,7 +344,7 @@ export default function Ask({ lastPhotoUri }: { lastPhotoUri?: string | null }) 
           due_date: d.due_date,
           evidence_count: d.evidence_count,
         }));
-        const { answer, unverified } = await (await getLlm()).askLedger(
+        const { answer, unverified, cited } = await (await getLlm()).askLedger(
           question,
           facts,
           items.length,
@@ -365,7 +365,18 @@ export default function Ask({ lastPhotoUri }: { lastPhotoUri?: string | null }) 
             note: "citation could NOT be verified against the ledger",
           };
         }
-        return { text: answer, note: "grounded - every citation verified" };
+        // Citing nothing is not the same as citing correctly. An answer that
+        // names no clause has not used the ledger, whatever else it did.
+        if (cited === 0) {
+          return {
+            text: answer,
+            note: "NOT grounded - the answer cites no clause at all",
+          };
+        }
+        return {
+          text: answer,
+          note: `grounded - ${cited} citation${cited === 1 ? "" : "s"} verified`,
+        };
       },
     );
   }

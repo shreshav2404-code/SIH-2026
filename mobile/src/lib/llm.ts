@@ -691,6 +691,16 @@ export interface LedgerAnswer {
    * Non-empty means the answer must not be presented as grounded.
    */
   unverified: string[];
+  /**
+   * How many statute references the answer contained at all.
+   *
+   * Zero is its own problem, and the check missed it: an answer citing nothing
+   * has nothing to contradict, so it passed as "every citation verified" and
+   * was captioned grounded. That is how a model rambling about "legal or
+   * medical terms" earned a green label. A ledger answer that cites no clause
+   * has not used the ledger.
+   */
+  cited: number;
 }
 
 /**
@@ -779,5 +789,7 @@ state a statute or regulation number that is not listed above.`),
     messageOptions(),
   );
 
-  return { answer, unverified: unverifiedCitations(answer, facts) };
+  const unverified = unverifiedCitations(answer, facts);
+  const cited = [...answer.matchAll(STATUTE_RE)].length;
+  return { answer, unverified, cited };
 }
