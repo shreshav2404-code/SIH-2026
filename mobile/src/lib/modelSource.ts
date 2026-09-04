@@ -26,11 +26,46 @@ export type ModelId = "e2b" | "qwen25" | "lfm25" | "smol360";
  * far has needed a different answer and the code was starting to accumulate
  * `id === "qwen17"` checks. A new model should be describable, not coded for.
  *
- *   "none"      the template never opens a reasoning block. Nothing to do.
- *   "no-think"  the template honours a `/no_think` marker in the message.
- *   "config"    the engine's ThinkingOptions reaches it (Gemma 4 family).
+ *   "none"      the template never opens a reasoning block. The toggle has
+ *               nothing to switch and the model simply answers.
+ *   "no-think"  the template honours a `/no_think` marker in the message, so
+ *               the toggle works in both directions.
+ *   "config"    the engine's ThinkingOptions reaches it (Gemma 4 family), so
+ *               the toggle works in both directions.
+ *   "forced"    the model reasons and CANNOT be stopped from here - Qwen3 is
+ *               the example: its template defaults enable_thinking to true,
+ *               that is a render-time variable we cannot set, ThinkingOptions
+ *               does not reach it, and the bundle has no /no_think switch.
+ *               The toggle cannot turn this off, so the UI says so instead of
+ *               quietly doing nothing.
  */
-export type ThinkingControl = "none" | "no-think" | "config";
+export type ThinkingControl = "none" | "no-think" | "config" | "forced";
+
+/**
+ * What the reasoning toggle will ACTUALLY do for this model.
+ *
+ * Returned as text for the UI, because a switch that silently does nothing on
+ * some models is worse than one that explains itself. `wanted` is the toggle
+ * position the officer has chosen.
+ */
+export function describeThinking(spec: ModelSpec, wanted: boolean): string {
+  switch (spec.thinking) {
+    case "forced":
+      return "always reasons — this model cannot be told not to";
+    case "none":
+      return wanted
+        ? "no reasoning available — this model answers directly"
+        : "answers directly";
+    case "no-think":
+    case "config":
+      return wanted ? "will reason before answering" : "answers directly";
+  }
+}
+
+/** Can the toggle change anything for this model? */
+export function thinkingIsSwitchable(spec: ModelSpec): boolean {
+  return spec.thinking === "no-think" || spec.thinking === "config";
+}
 
 export interface ModelSpec {
   id: ModelId;

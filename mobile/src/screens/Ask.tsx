@@ -22,6 +22,8 @@ import { fetchDuties, type Duty } from "../lib/api";
 import {
   DEFAULT_MODEL_ID,
   describeOrigin,
+  describeThinking,
+  thinkingIsSwitchable,
   loadPreferredModel,
   savePreferredModel,
   formatBytes,
@@ -503,13 +505,24 @@ export default function Ask({ lastPhotoUri }: { lastPhotoUri?: string | null }) 
             <Text style={[s.thinkLabel, thinking && s.thinkLabelOn]}>
               Let the model reason first
             </Text>
-            <Text style={s.thinkNote}>
-              Better on hard questions, and much slower — it thinks before it
-              answers, inside the same short output budget.
-            </Text>
+            {/* Say what the switch will actually do for the SELECTED model.
+                Not every model can be told to stop reasoning, and one that
+                silently ignores the toggle is worse than one that explains. */}
+            <Text style={s.thinkNote}>{describeThinking(spec, thinking)}</Text>
+            {!thinkingIsSwitchable(spec) && (
+              <Text style={s.thinkWarn}>
+                this switch has no effect on {spec.label}
+              </Text>
+            )}
           </View>
           <Text style={[s.thinkState, thinking && s.thinkLabelOn]}>
-            {thinking ? "ON" : "OFF"}
+            {spec.thinking === "forced"
+              ? "ALWAYS"
+              : spec.thinking === "none"
+                ? "N/A"
+                : thinking
+                  ? "ON"
+                  : "OFF"}
           </Text>
         </TouchableOpacity>
 
@@ -593,7 +606,13 @@ export default function Ask({ lastPhotoUri }: { lastPhotoUri?: string | null }) 
           disabled={busy}
         >
           <Text style={[s.thinkPillText, thinking && s.switchTextOn]}>
-            {thinking ? "REASONING" : "FAST"}
+            {llmModule?.activeSpec && !thinkingIsSwitchable(llmModule.activeSpec)
+              ? llmModule.activeSpec.thinking === "forced"
+                ? "REASONS"
+                : "FAST"
+              : thinking
+                ? "REASONING"
+                : "FAST"}
           </Text>
         </TouchableOpacity>
         {MODELS.map((m) => {
@@ -809,6 +828,7 @@ const s = StyleSheet.create({
   thinkLabel: { fontSize: 13, fontWeight: "700", color: C.ink },
   thinkLabelOn: { color: C.accent },
   thinkNote: { marginTop: 2, fontSize: 11, lineHeight: 15, color: C.inkSoft },
+  thinkWarn: { marginTop: 3, fontSize: 10, color: C.warn, fontStyle: "italic" },
   thinkState: { fontSize: 12, fontWeight: "700", color: C.inkSoft },
 
   // ---- model switcher (chat view) ----
