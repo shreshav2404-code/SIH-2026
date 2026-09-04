@@ -123,9 +123,9 @@ export const MODELS: ModelSpec[] = [
   },
   {
     id: "qwen25",
-    filename: "Qwen2.5-1.5B-Instruct_q8.litertlm",
+    filename: "Qwen2.5-1.5B-Instruct_multi-prefill-seq_q8_ekv4096.litertlm",
     label: "Qwen2.5 1.5B",
-    approxBytes: 1_599_229_952,
+    approxBytes: 1_597_931_520,
     multimodal: false,
     thinking: "none",
     blurb: "Strong at instructions · int8 · text only",
