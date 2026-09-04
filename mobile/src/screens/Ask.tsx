@@ -204,8 +204,8 @@ export default function Ask({ lastPhotoUri }: { lastPhotoUri?: string | null }) 
       // be set before switchModel, not after.
       llm.setThinking(thinkingRef.current);
       // switchModel unloads first and unconditionally, so the two never
-      // coexist in memory - which matters on a 7.5 GB phone where E2B alone
-      // peaks at 2.5 GB.
+      // coexist in memory - which matters on a 7.5 GB phone where the larger
+      // model alone peaks around 3 GB.
       await llm.switchModel(want, (pct) => setState({ kind: "loading", pct }));
       // Persist BEFORE anything can fail downstream: if the engine is now
       // corrupted the fix is to reopen the app, and that only helps if the
@@ -387,7 +387,7 @@ export default function Ask({ lastPhotoUri }: { lastPhotoUri?: string | null }) 
    * Record the officer speaking, then hand the audio to the model.
    *
    * The recording never leaves the phone: expo-audio writes it to app storage
-   * and the file path goes straight into E2B, which takes audio natively. That
+   * and the file path goes straight into E4B, which takes audio natively. That
    * is the whole reason this app needs no speech-to-text service and works in
    * airplane mode.
    */

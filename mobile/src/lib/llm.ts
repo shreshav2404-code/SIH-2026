@@ -378,7 +378,8 @@ export function unloadModel(): void {
  * Swap the resident model for another one.
  *
  * Unloads first and unconditionally, so the two never coexist in memory. On a
- * 7.5 GB phone that ordering is not a detail: E2B alone peaks at 2.5 GB.
+ * 7.5 GB phone that ordering is not a detail: the larger model alone peaks
+ * around 3 GB.
  */
 export async function switchModel(
   spec: ModelSpec,
@@ -560,7 +561,7 @@ export async function extractDuties(
  * ------------------------------------------------------------------ */
 
 /**
- * Spoken audio goes straight in â€” E2B takes audio natively, so there is no
+ * Spoken audio goes straight in â€” E4B takes audio natively, so there is no
  * Whisper, no separate speech-to-text model, no extra 500 MB to load. One
  * fewer dependency than the obvious architecture.
  */

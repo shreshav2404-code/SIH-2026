@@ -1,6 +1,6 @@
 # Shipping the APK to a phone
 
-A **release** APK with Gemma 4 E2B inside it: one file, install it on any
+A **release** APK with Gemma 4 E4B and LFM2.5 inside it: one file, install it on any
 arm64 Android phone, and the on-device model works with no cable and no laptop.
 
 > **The debug APK on the emulator is not this.** A debug build fetches its
@@ -35,7 +35,7 @@ bundleModel=true
 def bundleModel = (findProperty('bundleModel') ?: 'false').toBoolean()
 def modelDir = file("${projectRoot}/../models")
 
-if (bundleModel && !file("${modelDir}/gemma-4-E2B-it.litertlm").exists()) {
+if (bundleModel && !file("${modelDir}/gemma-4-E4B-it-gpu.litertlm").exists()) {
     throw new GradleException("bundleModel=true but no model at ${modelDir}")
 }
 
@@ -102,7 +102,7 @@ Output:
 mobile/android/app/build/outputs/apk/release/app-release.apk    ~2.8 GB
 ```
 
-**Expect this to take a while.** It repackages 2.59 GB. Building a debug APK
+**Expect this to take a while.** It repackages 3.46 GB. Building a debug APK
 afterwards is unaffected — debug ignores the model entirely.
 
 ---
@@ -126,7 +126,7 @@ storage on first launch.
 ## First launch on the phone
 
 1. Open the app → **Ask** tab
-2. **Load the model.** The first launch extracts 2.59 GB out of the APK, so it
+2. **Load the model.** The first launch extracts the model out of the APK, so it
    takes a minute and shows progress. Every launch after that is instant.
 3. It should read **"extracted from the app bundle"**, and this time the engine
    actually starts — GPU backend on a Snapdragon or Exynos phone, roughly
@@ -175,8 +175,10 @@ breaks nothing that matters.
       APK cannot reach the API at all**, see `ANDROID_BUILD.md` §6
 - [ ] `bundleModel=true` in `android/gradle.properties`
 - [ ] copy task + `noCompress` in `android/app/build.gradle`
-- [ ] `models/` holds **exactly one** `.litertlm`: `gemma-4-E2B-it.litertlm`,
-      2,588,147,712 bytes. Spare weights live in `models-archive/` — the whole
+- [ ] `models/` holds **exactly two** `.litertlm` files —
+      `gemma-4-E4B-it-gpu.litertlm` (2,969,059,328 bytes) and
+      `LFM2.5-1.2B-Instruct_int4.litertlm` (736,015,744). Spare weights live in
+      `models-archive/` — the whole
       `models/` directory is an asset source, so a second file doubles the APK
 - [ ] Server address set on the sign-in screen (no rebuild needed)
 - [ ] Build variant set to **release** in Android Studio

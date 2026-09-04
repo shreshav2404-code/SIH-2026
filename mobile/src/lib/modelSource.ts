@@ -17,7 +17,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { File, Paths } from "expo-file-system";
 
-export type ModelId = "e2b" | "lfm25";
+export type ModelId = "e4b" | "lfm25";
 
 /**
  * How a model's chat template handles reasoning.
@@ -80,7 +80,7 @@ export interface ModelSpec {
    * have judged a good file incomplete and re-extracted it forever.
    */
   approxBytes: number;
-  /** Audio and image input. Only E2B has it; the rest are text-only. */
+  /** Audio and image input. Only E4B has it; the rest are text-only. */
   multimodal: boolean;
   /** See ThinkingControl. Verified by reading each bundle's chat template. */
   thinking: ThinkingControl;
@@ -96,11 +96,15 @@ export interface ModelSpec {
  * enough to get statute wrong, and getting statute wrong is the failure this
  * whole system exists to prevent.
  *
- * E2B is the only one measured answering correctly on this hardware - GPU/4096,
- * real clause references, citations that verify against the corpus - and the
- * only one that can hear speech or read a photograph. LFM2.5 is 1.2B rather
- * than a few hundred million, so it has enough capability to be worth asking,
- * and it is built for phone hardware rather than scaled down from a server.
+ * E4B is the model this build plan specified from the start. It was dropped
+ * once, when the generic 3.66 GB build was refused by the pre-flight memory
+ * check for being ~62 MB short, and E2B stood in - E2B did answer correctly on
+ * this hardware (GPU/4096, real clause references, citations verifying against
+ * the corpus), which is why it was a sound fallback. The GPU variant used here
+ * is 640 MB smaller than the build that failed, ten times that shortfall, and
+ * matches the path the phone actually takes. LFM2.5 is 1.2B rather than a few
+ * hundred million, so it has enough capability to be worth asking, and is
+ * built for phone hardware rather than scaled down from a server.
  *
  * Every model here has had its chat template extracted from the .litertlm
  * bundle and READ, because that is what caught the failure that wasted a
@@ -115,8 +119,8 @@ export interface ModelSpec {
  * check reports as a reasoning model.
  *
  * SIZE IS A HARD CEILING. An APK is a ZIP32 archive and cannot exceed 4 GiB,
- * so the weights must stay under about 3.7 GB. E2B takes 2.41 of that, which
- * caps the second model at roughly 1.35 GB - the reason Qwen2.5 1.5B is
+ * so the weights must stay under about 3.7 GB. E4B takes 2.97 of that, which
+ * caps the second model at roughly 0.75 GB - the reason Qwen2.5 1.5B is
  * verified, kept in models-archive/, and not shipped.
  *
  * Only ever ONE is resident. Peak memory is whatever the larger needs, not the
@@ -125,13 +129,17 @@ export interface ModelSpec {
  */
 export const MODELS: ModelSpec[] = [
   {
-    id: "e2b",
-    filename: "gemma-4-E2B-it.litertlm",
-    label: "Gemma 4 E2B",
-    approxBytes: 2_588_147_712,
+    id: "e4b",
+    // The GPU build, not the generic one. 2.97 GB against 3.66, and the phone
+    // loads Gemma on the GPU path anyway - which is the whole reason E4B is
+    // back: the generic build was refused by the pre-flight memory check by
+    // 62 MB, and this variant is 640 MB smaller. Ten times the shortfall.
+    filename: "gemma-4-E4B-it-gpu.litertlm",
+    label: "Gemma 4 E4B",
+    approxBytes: 2_969_059_328,
     multimodal: true,
     thinking: "config",
-    blurb: "Recommended · understands speech and photos",
+    blurb: "Best reasoning · speech and photos · can think first",
   },
   {
     id: "lfm25",
@@ -144,7 +152,7 @@ export const MODELS: ModelSpec[] = [
   },
 ];
 
-export const DEFAULT_MODEL_ID: ModelId = "e2b";
+export const DEFAULT_MODEL_ID: ModelId = "e4b";
 
 const PREF_KEY = "anupalan.model";
 
@@ -263,8 +271,8 @@ export function locateAll(): ModelLocation[] {
 /**
  * Make a model available and return its path.
  *
- * If it was bundled into the APK, this copies it out on first use. E2B is
- * 2.59 GB, so that takes a while and should happen behind a progress
+ * If it was bundled into the APK, this copies it out on first use. E4B is
+ * 2.97 GB, so that takes a while and should happen behind a progress
  * indicator, never in front of a judge. Later calls find it extracted and
  * return immediately.
  */
@@ -320,7 +328,7 @@ export function describeOrigin(origin: ModelOrigin): string {
   }
 }
 
-/** "2.59 GB" / "932 MB" */
+/** "2.97 GB" / "706 MB" */
 export function formatBytes(n: number): string {
   return n >= 2 ** 30
     ? `${(n / 2 ** 30).toFixed(2)} GB`

@@ -277,16 +277,21 @@ lands past the boundary — and it says nothing about size.
 weights must stay under about **3.7 GB**. Current set:
 
 ```
-gemma-4-E2B-it.litertlm              2.41 GB
+gemma-4-E4B-it-gpu.litertlm          2.77 GB
 LFM2.5-1.2B-Instruct_int4.litertlm   0.69 GB
-SmolLM2_360M_instruct.litertlm       0.35 GB
                                      ------
-                                     3.44 GB  ->  APK ~3.69 GB
+                                     3.46 GB  ->  APK ~3.70 GB
 ```
 
-Qwen2.5-1.5B (1.49 GB) is verified and kept in `models-archive/`, but E2B plus
-Qwen2.5 alone is 3.90 GB and does not fit. Adding it means dropping E2B, which
-also means losing the only multimodal model — no speech, no photographs.
+Qwen2.5-1.5B (1.49 GB) is verified and kept in `models-archive/`, but E4B plus
+Qwen2.5 is 4.26 GB and does not fit. So is E2B plus Qwen2.5, at 3.90 GB before
+code. Either pairing means dropping the multimodal model — no speech, no
+photographs — which is the demo this whole system is built around.
+
+**Use the GPU variants.** `gemma-4-E4B-it-gpu.litertlm` is 2.97 GB against the
+generic build's 3.66 GB, and the phone loads Gemma on the GPU path regardless.
+That 640 MB is the difference between E4B fitting and not: the generic build
+was refused by the pre-flight memory check for being ~62 MB short.
 
 **Do the arithmetic before building.** The package step takes about twelve
 minutes to reach the point where it fails.
