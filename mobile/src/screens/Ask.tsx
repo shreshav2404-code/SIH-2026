@@ -30,7 +30,8 @@ import {
   locateModel,
   modelById,
   MODELS,
-  multimodalModel,
+  audioModel,
+  visionModel,
   type ModelId,
   type ModelSpec,
 } from "../lib/modelSource";
@@ -221,20 +222,38 @@ export default function Ask({ lastPhotoUri }: { lastPhotoUri?: string | null }) 
   /**
    * Make sure the multimodal model is the one loaded.
    *
-   * Voice and photo input do not exist on the Qwen build, so rather than fail
-   * with a confusing engine error, swap first and say so in the thread.
+   * Vision and hearing are separate capabilities and separate models. Asking
+   * for one the build does not carry has to fail HERE, with a sentence, rather
+   * than inside the engine with a stack trace.
    */
-  const ensureMultimodal = useCallback(async (): Promise<boolean> => {
-    const mm = multimodalModel();
-    if (llmModule?.activeSpec?.id === mm.id) return true;
-    push({
-      role: "model",
-      text: `Switching to ${mm.label} - it is the only bundled model that can read speech and images.`,
-      note: "model switch",
-    });
-    await warm(mm);
-    return llmModule?.activeSpec?.id === mm.id;
-  }, [warm]);
+  const ensureCapable = useCallback(
+    async (want: "vision" | "audio"): Promise<boolean> => {
+      const spec = want === "vision" ? visionModel() : audioModel();
+      if (!spec) {
+        push({
+          role: "model",
+          text:
+            want === "vision"
+              ? "No model in this build can read an image."
+              : "No model in this build can hear speech. Only the Gemma 4 " +
+                "family can, and it is not bundled - it was too slow on this " +
+                "handset to be worth the wait.",
+        });
+        return false;
+      }
+      if (llmModule?.activeSpec?.id === spec.id) return true;
+      push({
+        role: "model",
+        text: `Switching to ${spec.label} - it is the bundled model that can ${
+          want === "vision" ? "read images" : "hear speech"
+        }.`,
+        note: "model switch",
+      });
+      await warm(spec);
+      return llmModule?.activeSpec?.id === spec.id;
+    },
+    [warm],
+  );
 
   useEffect(() => {
     const show = Keyboard.addListener("keyboardDidShow", (e) =>
@@ -401,7 +420,8 @@ export default function Ask({ lastPhotoUri }: { lastPhotoUri?: string | null }) 
       }
       const uri = recorder.uri;
       if (!uri) return;
-      if (!(await ensureMultimodal())) return;
+      // Hearing, not seeing. A vision model cannot transcribe.
+      if (!(await ensureCapable("audio"))) return;
       await run(
         "Draft an observation from what I just said",
         async () => (await getLlm()).observationFromAudio(uri, null),
@@ -447,7 +467,7 @@ export default function Ask({ lastPhotoUri }: { lastPhotoUri?: string | null }) 
       const shot = await camera.current?.takePictureAsync({ quality: 0.6 });
       setCamOpen(false);
       if (!shot?.uri) return;
-      if (!(await ensureMultimodal())) return;
+      if (!(await ensureCapable("vision"))) return;
       await run(
         "What does this show?",
         async () => (await getLlm()).describePhoto(shot.uri, "What is wrong here?"),
@@ -626,7 +646,8 @@ export default function Ask({ lastPhotoUri }: { lastPhotoUri?: string | null }) 
             >
               <Text style={[s.switchText, on && s.switchTextOn]}>
                 {m.label}
-                {m.multimodal ? " · voice/photo" : ""}
+                {m.vision ? " · photos" : ""}
+                {m.audio ? " · voice" : ""}
               </Text>
             </TouchableOpacity>
           );
@@ -713,7 +734,7 @@ export default function Ask({ lastPhotoUri }: { lastPhotoUri?: string | null }) 
             onPress={async () => {
               // Only the multimodal model can read an image; swap first rather
               // than fail with an engine error the officer cannot act on.
-              if (!(await ensureMultimodal())) return;
+              if (!(await ensureCapable("vision"))) return;
               await run(
                 "What does the evidence photo show?",
                 async () =>

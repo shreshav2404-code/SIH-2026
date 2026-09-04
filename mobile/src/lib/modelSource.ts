@@ -17,7 +17,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { File, Paths } from "expo-file-system";
 
-export type ModelId = "qwen25" | "falconR" | "lfm230";
+export type ModelId = "qwen25" | "falconR" | "granite350" | "lfmvl450";
 
 /**
  * How a model's chat template handles reasoning.
@@ -72,12 +72,18 @@ export interface ModelSpec {
    */
   approxBytes: number;
   /**
-   * Audio and image input. None of the models in this build has it — the only
-   * multimodal option in LiteRT-LM is the Gemma 4 family, and E4B took 45
-   * seconds to load and 144 seconds to answer on this handset. See the note
-   * on MODELS below.
+   * Can read an image. Separate from `audio` on purpose: LFM2.5-VL sees but
+   * cannot hear, and a single `multimodal` flag would have offered a
+   * microphone that no bundled model can listen through - failing at the
+   * moment the officer taps it, which is the worst place to find out.
    */
-  multimodal: boolean;
+  vision: boolean;
+  /**
+   * Can hear speech. Only the Gemma 4 family manages this in LiteRT-LM, and it
+   * is archived for being too slow on this handset, so nothing in this build
+   * sets it. The voice button hides itself rather than lying.
+   */
+  audio: boolean;
   /** See ThinkingControl. Verified by reading each bundle's chat template. */
   thinking: ThinkingControl;
   /** One line under the label in the picker. */
@@ -119,7 +125,8 @@ export const MODELS: ModelSpec[] = [
     filename: "Qwen2.5-1.5B-Instruct_multi-prefill-seq_q8_ekv4096.litertlm",
     label: "Qwen2.5 1.5B",
     approxBytes: 1_597_931_520,
-    multimodal: false,
+    vision: false,
+    audio: false,
     thinking: "none",
     blurb: "Most capable here · int8 · text only",
   },
@@ -128,26 +135,38 @@ export const MODELS: ModelSpec[] = [
     filename: "Falcon-H1-Tiny-R-0.6B_int8.litertlm",
     label: "Falcon-H1 0.6B R",
     approxBytes: 873_254_788,
-    multimodal: false,
-    // The R is Reasoning: this model is TRAINED to reason, so it may show its
-    // working in the answer even though nothing forces it to. The template was
-    // read and ends cleanly at <|im_start|>assistant with no <think> injection,
-    // so it is not the Qwen3 trap - that one defaulted enable_thinking to true
-    // and could not be switched off from here. Watch the output anyway: a
-    // reasoning-tuned model can still ramble past a 150-token budget.
+    vision: false,
+    audio: false,
+    // The R is Reasoning: TRAINED to reason, so it may show its working even
+    // though nothing forces it to. Its template ends cleanly at
+    // <|im_start|>assistant with no <think> injection, so it is not the Qwen3
+    // trap - that one defaulted enable_thinking to true and could not be
+    // switched off from here. Still worth watching against a 150-token budget.
     thinking: "none",
     blurb: "Reasoning-tuned · int8 · may show its working",
   },
   {
-    id: "lfm230",
-    filename: "LFM2.5-230M_int4.litertlm",
-    label: "LFM2.5 230M",
-    approxBytes: 176_756_720,
-    multimodal: false,
+    id: "lfmvl450",
+    filename: "LFM2.5-VL-450M_int8.litertlm",
+    label: "LFM2.5-VL 450M",
+    approxBytes: 563_549_568,
+    vision: true,
+    audio: false,
     thinking: "none",
-    blurb: "Smallest · instant · light chat only",
+    blurb: "Reads photographs · int8 · nine languages",
+  },
+  {
+    id: "granite350",
+    filename: "granite-4.0-h-350m_int8_gpu.litertlm",
+    label: "Granite 4.0 350M",
+    approxBytes: 481_218_880,
+    vision: false,
+    audio: false,
+    thinking: "none",
+    blurb: "Fastest · int8 · light chat",
   },
 ];
+
 
 
 /**
@@ -191,11 +210,14 @@ export function modelById(id: ModelId): ModelSpec {
   return m;
 }
 
-/** The multimodal one, for voice and photo input. */
-export function multimodalModel(): ModelSpec {
-  const m = MODELS.find((x) => x.multimodal);
-  if (!m) throw new Error("No multimodal model is bundled in this build.");
-  return m;
+/** A bundled model that can read images, or null if none can. */
+export function visionModel(): ModelSpec | null {
+  return MODELS.find((m) => m.vision) ?? null;
+}
+
+/** A bundled model that can hear speech, or null if none can. */
+export function audioModel(): ModelSpec | null {
+  return MODELS.find((m) => m.audio) ?? null;
 }
 
 export type ModelOrigin = "app-storage" | "bundled-asset" | "missing";
