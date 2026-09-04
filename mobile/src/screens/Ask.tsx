@@ -140,6 +140,8 @@ export default function Ask({ lastPhotoUri }: { lastPhotoUri?: string | null }) 
   /** Which model the user has chosen. Only one is ever resident. */
   const [activeId, setActiveId] = useState<ModelId>(DEFAULT_MODEL_ID);
   const scroller = useRef<ScrollView>(null);
+  /** Read inside warm(), which is memoised and must not capture a stale value. */
+  const thinkingRef = useRef(false);
   const insets = useSafeAreaInsets();
 
   /** Voice capture. The audio goes straight into the model; it never uploads. */
@@ -160,6 +162,18 @@ export default function Ask({ lastPhotoUri }: { lastPhotoUri?: string | null }) 
   /** Seconds the current answer has been generating. */
   const [elapsed, setElapsed] = useState(0);
 
+  /**
+   * Let the model reason before answering. Off, deliberately.
+   *
+   * The engine's own default is ON, which is very probably why Qwen3-1.7B
+   * looked broken - it opened a reasoning block, spent the 150-token output
+   * budget in it, and never reached the answer. Exposed rather than hidden
+   * because it is a real capability, but every task in this app is short and
+   * grounded and reasoning only costs time the officer is standing there for.
+   */
+  const [thinking, setThinkingOn] = useState(false);
+  thinkingRef.current = thinking;
+
   /** Camera capture, for asking the model about something in front of you. */
   const [camOpen, setCamOpen] = useState(false);
   const [camPerm, requestCamPerm] = useCameraPermissions();
@@ -173,6 +187,9 @@ export default function Ask({ lastPhotoUri }: { lastPhotoUri?: string | null }) 
     setState({ kind: "loading", pct: 0 });
     try {
       const llm = await getLlm();
+      // Session-level: the engine reads it when the model loads, so it has to
+      // be set before switchModel, not after.
+      llm.setThinking(thinkingRef.current);
       // switchModel unloads first and unconditionally, so the two never
       // coexist in memory - which matters on a 7.5 GB phone where E2B alone
       // peaks at 2.5 GB.
@@ -455,8 +472,28 @@ export default function Ask({ lastPhotoUri }: { lastPhotoUri?: string | null }) 
           );
         })}
 
+        <TouchableOpacity
+          style={[s.thinkRow, thinking && s.thinkRowOn]}
+          onPress={() => setThinkingOn((v) => !v)}
+          disabled={state.kind === "loading"}
+        >
+          <View style={{ flex: 1 }}>
+            <Text style={[s.thinkLabel, thinking && s.thinkLabelOn]}>
+              Let the model reason first
+            </Text>
+            <Text style={s.thinkNote}>
+              Better on hard questions, and much slower — it thinks before it
+              answers, inside the same short output budget.
+            </Text>
+          </View>
+          <Text style={[s.thinkState, thinking && s.thinkLabelOn]}>
+            {thinking ? "ON" : "OFF"}
+          </Text>
+        </TouchableOpacity>
+
         <View style={s.card}>
           <Row label="Selected">{spec.label}</Row>
+          <Row label="Reasoning">{thinking ? "enabled" : "off (recommended)"}</Row>
           <Row label="On device">
             {found.bytes
               ? `${formatBytes(found.bytes)}${found.complete ? "" : " (incomplete)"}`
@@ -732,6 +769,16 @@ const s = StyleSheet.create({
   modelSize: { fontSize: 12, color: C.inkSoft, fontVariant: ["tabular-nums"] },
   modelBlurb: { marginTop: 3, fontSize: 12, color: C.inkSoft },
   modelState: { marginTop: 6, fontSize: 11, color: C.inkSoft, fontStyle: "italic" },
+  thinkRow: {
+    flexDirection: "row", alignItems: "center", gap: 10, marginTop: 4,
+    padding: 12, borderRadius: 8, borderWidth: 1,
+    borderColor: C.line, backgroundColor: C.panel,
+  },
+  thinkRowOn: { borderColor: C.accent },
+  thinkLabel: { fontSize: 13, fontWeight: "700", color: C.ink },
+  thinkLabelOn: { color: C.accent },
+  thinkNote: { marginTop: 2, fontSize: 11, lineHeight: 15, color: C.inkSoft },
+  thinkState: { fontSize: 12, fontWeight: "700", color: C.inkSoft },
 
   // ---- model switcher (chat view) ----
   switcher: {

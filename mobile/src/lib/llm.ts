@@ -114,8 +114,20 @@ let loadingSpec: ModelSpec | null = null;
 
 export type LoadState = "idle" | "loading" | "ready" | "error";
 
+/**
+ * Qwen3 reads `/no_think` in the message itself and skips its reasoning block.
+ *
+ * Belt and braces: LLMConfig.thinking is documented for "Gemma 4 models", so
+ * it may never reach a Qwen conversation. This switch is part of Qwen's own
+ * chat template, so it works wherever the template does.
+ */
+function thinkingSuffix(): string {
+  if (thinkingEnabled) return "";
+  return activeSpec?.id === "qwen17" ? "\n/no_think" : "";
+}
+
 function text(s: string): MultimodalPart[] {
-  return [{ type: "text", text: s }];
+  return [{ type: "text", text: s + thinkingSuffix() }];
 }
 
 /**
@@ -128,6 +140,31 @@ function text(s: string): MultimodalPart[] {
  * Never pass `suppressTokens` â€” it aborts the process on litertlm-android
  * 0.15/0.16.
  */
+/**
+ * Whether the engine may generate a reasoning block before answering.
+ *
+ * OFF, and that is not a detail. The engine default is `true`, and it is very
+ * probably why Qwen3-1.7B looked broken: Qwen's own chat template ends with
+ *
+ *     {%- if not enable_thinking|default(true) %}{{- '<think>
+
+</think>' }}
+ *
+ * so it opens a <think> block, spends the 150-token output budget reasoning,
+ * and never reaches the answer. What surfaced on screen was the tail of that,
+ * which reads like the model misunderstanding the question.
+ *
+ * It is wrong for this app regardless of model. Every task here is short and
+ * grounded - copy a clause reference, list what is overdue, draft forty words
+ * - and at roughly ten tokens a second on a mid-range phone a reasoning block
+ * costs thirty to sixty seconds to produce something the officer never sees.
+ */
+export let thinkingEnabled = false;
+
+export function setThinking(on: boolean) {
+  thinkingEnabled = on;
+}
+
 export function loadModel(
   spec: ModelSpec = modelById(DEFAULT_MODEL_ID),
   onProgress?: (pct: number) => void,
@@ -182,6 +219,8 @@ export function loadModel(
             maxContextTokens: rung.maxContextTokens,
             enableStructuredOutput: true,
             temperature: TEMPERATURE,
+            // Session default. The engine's own default is true.
+            thinking: { enabled: thinkingEnabled },
           },
           onProgress,
         );
