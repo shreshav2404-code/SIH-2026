@@ -250,6 +250,29 @@ export function isLoaded() {
  * reusable and its allocations reachable, and holding 0.9 GB of dead weights
  * while mapping 2.6 GB more is how a 7.5 GB phone ends up thrashing.
  */
+/**
+ * True once a model has been swapped in this process.
+ *
+ * LiteRT-LM does not reliably load a second model after the first is closed:
+ * the new one reports as loaded, but the first inference dies with
+ *
+ *   LiteRtLmJniException: Status Code: 13
+ *   llm_litert_compiled_model_executor.cc:708 Failed to invoke the compiled model
+ *
+ * Measured on the M31s - Qwen loaded on GPU/4096, switched to E2B, which came
+ * up as CPU/1024 at 1.8 GB resident (E2B needs ~2.5) and then refused to run.
+ * Loaded fresh in a new process, the same E2B is fine on GPU/4096.
+ *
+ * The engine cannot be reset from JS, so the app has to notice and say so.
+ */
+export let switchedThisSession = false;
+
+/** Does this error look like the post-switch corruption above? */
+export function isEngineCorrupted(err: unknown): boolean {
+  const m = err instanceof Error ? err.message : String(err);
+  return /failed to invoke|status code:\s*13|compiled_model_executor/i.test(m);
+}
+
 export function unloadModel(): void {
   const dying = llm;
   llm = null;
@@ -278,7 +301,24 @@ export async function switchModel(
   onProgress?: (pct: number) => void,
 ): Promise<LiteRTLMInstance> {
   if (llm && activeSpec?.id === spec.id) return llm;
+
+  // unload() before close(): unload releases the native allocation while the
+  // instance is still valid, close() then invalidates it. Doing only the
+  // latter left memory mapped, which is part of why the second load lands in
+  // a broken state.
+  const dying = llm;
+  if (dying) {
+    try {
+      await dying.unload();
+    } catch {
+      // Already released, or the engine is past caring.
+    }
+  }
+
+  const hadModel = llm !== null;
   unloadModel();
+  if (hadModel) switchedThisSession = true;
+
   return loadModel(spec, onProgress);
 }
 
@@ -531,13 +571,14 @@ In under 40 words: what is happening, why it matters, and what the duty requires
 export interface LedgerFact {
   title: string;
   /**
-   * The statute the clause belongs to, e.g. "Mines Rules 1955".
+   * The statute, e.g. "Mines Rules 1955".
    *
-   * This used to be omitted, which is how a wrong citation got on screen. The
-   * ledger gave the model only "R. 29-P", but a compliance answer wants the
-   * whole reference, so the model supplied the statute name FROM MEMORY - and
-   * on one run wrote "Mines Rules 1555". It was not disobeying the instruction
-   * not to invent regulation numbers; it was never given the number to copy.
+   * Kept for verification only - it is NOT rendered into the prompt. An
+   * earlier version printed `[act - clause_ref]` on the theory that the model
+   * was inventing statute names because it had not been given them. That was
+   * wrong: clause_ref already reads "Mines Rules 1955 - R. 29-P", so the
+   * prompt said the act twice and the model dutifully echoed the duplication
+   * back as "[Mines Rules 1955 - Mines Rules 1955 - R. 29-P]".
    */
   act: string;
   clause_ref: string;
@@ -586,11 +627,16 @@ const STATUTE_RE = /((?:[A-Z][A-Za-z.]*\s+){1,4}\d{4})/g;
  * is safety-critical, so it is verified here rather than requested politely.
  */
 export function unverifiedCitations(answer: string, facts: LedgerFact[]): string[] {
-  const allowed = new Set(facts.map((f) => f.act.toLowerCase().trim()));
+  // Check against what the model was actually shown. clause_ref carries the
+  // act inside it, so a statute-shaped phrase is verified if it appears in ANY
+  // supplied reference - matching on `act` alone missed references the model
+  // had every right to use.
+  const allowed = facts.map((f) => `${f.clause_ref} ${f.act}`.toLowerCase());
   const bad = new Set<string>();
   for (const m of answer.matchAll(STATUTE_RE)) {
     const cited = m[1].trim();
-    if (!allowed.has(cited.toLowerCase())) bad.add(cited);
+    const needle = cited.toLowerCase();
+    if (!allowed.some((ref) => ref.includes(needle))) bad.add(cited);
   }
   return [...bad];
 }
@@ -624,7 +670,7 @@ export async function askLedger(
   const table = facts
     .map(
       (f) =>
-        `- ${f.title} [${f.act} - ${f.clause_ref}] owner=${f.owner_role} status=${f.status}` +
+        `- ${f.title} [${f.clause_ref}] owner=${f.owner_role} status=${f.status}` +
         ` due=${f.due_date ?? "n/a"} evidence=${f.evidence_count}`,
     )
     .join("\n");

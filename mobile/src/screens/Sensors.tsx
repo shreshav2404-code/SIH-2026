@@ -1,6 +1,7 @@
 import {
   AudioModule,
   RecordingPresets,
+  setAudioModeAsync,
   useAudioRecorder,
 } from "expo-audio";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -124,18 +125,38 @@ export default function Sensors({ mineId }: { mineId: number }) {
       setNoiseAvailable(perm.granted);
       setAvail({ ...available });
       if (perm.granted) {
+        // Android will not populate `metering` unless recording is explicitly
+        // enabled on the audio session first. Without this the recorder runs -
+        // there is a live AudioIn thread in audioflinger - and getStatus()
+        // simply returns metering undefined forever, which read on screen as a
+        // steady 0.00 dB: a convincing measurement of silence that was really
+        // no measurement at all.
+        await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+
         await recorder.prepareToRecordAsync({
           ...RecordingPresets.HIGH_QUALITY,
           isMeteringEnabled: true,
         });
         recorder.record();
+
+        let sawMetering = false;
+        let polls = 0;
         poll.current = setInterval(() => {
           const m = recorder.getStatus().metering;
+          polls += 1;
           // dBFS is negative and relative to full scale. Shifting it into a
           // positive range makes it readable and responsive; it is NOT a
           // calibrated sound-pressure level and the UI says so.
           if (typeof m === "number" && Number.isFinite(m)) {
+            sawMetering = true;
             pushNoise(Math.max(0, m + NOISE_OFFSET));
+          } else if (!sawMetering && polls > 20) {
+            // Five seconds without a single reading means this device is not
+            // going to give us one. Say so, rather than show a fixed zero.
+            setNoiseAvailable(false);
+            setAvail({ ...available });
+            if (poll.current) clearInterval(poll.current);
+            poll.current = null;
           }
         }, POLL_MS);
       }

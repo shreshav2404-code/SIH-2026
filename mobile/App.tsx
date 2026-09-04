@@ -123,7 +123,9 @@ function AppInner() {
                 ? "Sync & Sign-off"
                 : tab === "ask"
                   ? "Ask ANUPALAN"
-                  : "Capture Evidence"}
+                : tab === "sensors"
+                    ? "Handset Telemetry"
+                    : "Capture Evidence"}
           </Text>
           <Text style={s.headerSub}>
             {user.full_name} · mine {user.mine_id}

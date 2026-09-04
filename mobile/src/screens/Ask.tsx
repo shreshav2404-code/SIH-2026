@@ -7,9 +7,8 @@ import {
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
+  Keyboard,
   Modal,
-  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -23,6 +22,8 @@ import { fetchDuties, type Duty } from "../lib/api";
 import {
   DEFAULT_MODEL_ID,
   describeOrigin,
+  loadPreferredModel,
+  savePreferredModel,
   formatBytes,
   locateModel,
   modelById,
@@ -145,6 +146,20 @@ export default function Ask({ lastPhotoUri }: { lastPhotoUri?: string | null }) 
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const [recording, setRecording] = useState(false);
 
+  /**
+   * Keyboard height, applied as bottom padding.
+   *
+   * KeyboardAvoidingView was tried first and does not work here: the app is
+   * edge-to-edge (gradle.properties edgeToEdgeEnabled=true), so the window
+   * never resizes and `behavior="height"` has nothing to shrink. Measured on
+   * the device, the composer sat completely underneath the keyboard. Listening
+   * for the keyboard and padding by its real height works regardless.
+   */
+  const [kbHeight, setKbHeight] = useState(0);
+
+  /** Seconds the current answer has been generating. */
+  const [elapsed, setElapsed] = useState(0);
+
   /** Camera capture, for asking the model about something in front of you. */
   const [camOpen, setCamOpen] = useState(false);
   const [camPerm, requestCamPerm] = useCameraPermissions();
@@ -162,6 +177,10 @@ export default function Ask({ lastPhotoUri }: { lastPhotoUri?: string | null }) 
       // coexist in memory - which matters on a 7.5 GB phone where E2B alone
       // peaks at 2.5 GB.
       await llm.switchModel(want, (pct) => setState({ kind: "loading", pct }));
+      // Persist BEFORE anything can fail downstream: if the engine is now
+      // corrupted the fix is to reopen the app, and that only helps if the
+      // choice survived.
+      await savePreferredModel(want.id);
       setActiveId(want.id);
       setState({ kind: "ready" });
     } catch (e) {
@@ -188,11 +207,38 @@ export default function Ask({ lastPhotoUri }: { lastPhotoUri?: string | null }) 
   }, [warm]);
 
   useEffect(() => {
+    const show = Keyboard.addListener("keyboardDidShow", (e) =>
+      setKbHeight(e.endCoordinates.height),
+    );
+    const hide = Keyboard.addListener("keyboardDidHide", () => setKbHeight(0));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
+
+  // A visible counter while the model works. This engine build does not emit
+  // tokens as it goes - the whole answer arrives at once after a minute or so
+  // - so without a counter the screen is simply still, and still looks broken.
+  useEffect(() => {
+    if (!busy) {
+      setElapsed(0);
+      return;
+    }
+    const t = setInterval(() => setElapsed((n) => n + 1), 1000);
+    return () => clearInterval(t);
+  }, [busy]);
+
+  useEffect(() => {
     // Only reflects an already-warm model; never triggers the import itself.
     if (llmModule?.isLoaded()) {
       setState({ kind: "ready" });
       if (llmModule.activeSpec) setActiveId(llmModule.activeSpec.id);
+      return;
     }
+    // Nothing loaded: restore the model chosen last time, so reopening the app
+    // after a failed switch lands on the model the officer actually wanted.
+    void loadPreferredModel().then((m) => setActiveId(m.id));
   }, []);
 
   function push(t: Turn) {
@@ -231,9 +277,17 @@ export default function Ask({ lastPhotoUri }: { lastPhotoUri?: string | null }) 
       push({ role: "model", text: body.trim(), note: caption });
     } catch (e) {
       setStreaming(null);
+      // A switch leaves LiteRT-LM unable to invoke. Say what to do about it
+      // rather than printing a Kotlin stack trace at a mine inspector.
+      const corrupted = llmModule?.isEngineCorrupted?.(e);
       push({
         role: "model",
-        text: `Could not answer: ${e instanceof Error ? e.message : e}`,
+        text: corrupted
+          ? `The engine cannot run after switching models in the same session. ` +
+            `Close and reopen the app — ${spec.label} is remembered and will ` +
+            `load on its own.`
+          : `Could not answer: ${e instanceof Error ? e.message : e}`,
+        note: corrupted ? "known LiteRT-LM limitation, not a data problem" : undefined,
       });
     } finally {
       setBusy(false);
@@ -460,11 +514,7 @@ export default function Ask({ lastPhotoUri }: { lastPhotoUri?: string | null }) 
     // edge-to-edge (gradle.properties: edgeToEdgeEnabled=true) and draws behind
     // the system bars - so adjustResize in the manifest is not enough on its
     // own and the composer ended up underneath the keyboard.
-    <KeyboardAvoidingView
-      style={s.wrap}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      keyboardVerticalOffset={insets.bottom}
-    >
+    <View style={[s.wrap, { paddingBottom: kbHeight }]}>
       <View style={s.banner}>
         <Text style={s.bannerText}>
           ON-DEVICE · {llmModule?.activeSpec?.label ?? spec.label}
@@ -526,9 +576,12 @@ export default function Ask({ lastPhotoUri }: { lastPhotoUri?: string | null }) 
           </View>
         )}
 
-        {busy && streaming !== null && streaming.length === 0 && (
-          <View style={[s.bubble, s.model]}>
+        {busy && (streaming === null || streaming.length === 0) && (
+          <View style={[s.bubble, s.model, s.busyBubble]}>
             <ActivityIndicator color={C.accent} size="small" />
+            <Text style={s.busyText}>
+              thinking on this device · {elapsed}s
+            </Text>
           </View>
         )}
       </ScrollView>
@@ -631,7 +684,7 @@ export default function Ask({ lastPhotoUri }: { lastPhotoUri?: string | null }) 
           </View>
         </View>
       </Modal>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
@@ -700,6 +753,8 @@ const s = StyleSheet.create({
     justifyContent: "center",
   },
   iconBtnRec: { backgroundColor: C.crit, borderColor: C.crit },
+  busyBubble: { flexDirection: "row", alignItems: "center", gap: 8 },
+  busyText: { fontSize: 12, color: C.inkSoft },
   iconText: { fontSize: 10, fontWeight: "700", color: C.inkSoft, letterSpacing: 0.5 },
   iconTextRec: { color: "#fff" },
   camWrap: { flex: 1, backgroundColor: "#000" },

@@ -14,6 +14,7 @@
  * None of this touches the network. The models never leave the device.
  */
 
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { File, Paths } from "expo-file-system";
 
 export type ModelId = "e2b" | "qwen17";
@@ -40,14 +41,15 @@ export interface ModelSpec {
 /**
  * The models shipped inside the APK.
  *
- * Two, because at this size one model cannot be both quick and multimodal.
- * Qwen3-1.7B is the everyday default: 0.91 GB against E2B's 2.59, and trained
- * for instruction-following and function calling, which is what "copy this
- * clause reference exactly" actually asks for. E2B is loaded on demand for
- * spoken Hindi and photographs, which Qwen cannot do at all.
+ * E2B is the default because it is the one that works. Qwen3-1.7B was chosen
+ * first on paper - a third of the size, trained for instruction-following -
+ * and then failed on the device: it answers a ledger question by saying the
+ * question is unclear. Paper reasoning lost to a measurement, which is the
+ * right way round.
  *
- * Only ever ONE is resident — see `switchModel()` in llm.ts. Peak memory is
- * therefore whatever the larger one needs, not the sum.
+ * Only ever ONE is resident. Peak memory is whatever the larger one needs,
+ * not the sum - and switching between them mid-session does not work, see
+ * switchModel() in llm.ts.
  */
 export const MODELS: ModelSpec[] = [
   {
@@ -56,7 +58,13 @@ export const MODELS: ModelSpec[] = [
     label: "Qwen3 1.7B",
     approxBytes: 977_184_032,
     multimodal: false,
-    blurb: "Fast · text only · everyday default",
+    // Measured on the M31s and it does not work: asked "what is overdue and
+    // who owns it?", it replied "It seems like you're mixing up some phrases"
+    // and rambled past the word limit. It loads fine on GPU/4096 and is fast,
+    // so the fault is almost certainly the chat template not being applied by
+    // this .litertlm conversion, not the weights. Kept because it is a third
+    // of E2B's size and worth revisiting, but it must not be the default.
+    blurb: "Fast, but currently unreliable · text only",
   },
   {
     id: "e2b",
@@ -64,12 +72,44 @@ export const MODELS: ModelSpec[] = [
     label: "Gemma 4 E2B",
     approxBytes: 2_588_147_712,
     multimodal: true,
-    blurb: "Slower · understands speech and photos",
+    blurb: "Recommended · understands speech and photos",
   },
 ];
 
-/** Light enough to keep the app responsive; the heavy one is opt-in. */
-export const DEFAULT_MODEL_ID: ModelId = "qwen17";
+/**
+ * E2B, because it is the one that demonstrably answers correctly on this
+ * hardware. Qwen3-1.7B is a third of the size and loads faster, and would be
+ * the better default if its output were usable - see its blurb above.
+ */
+export const DEFAULT_MODEL_ID: ModelId = "e2b";
+
+const PREF_KEY = "anupalan.model";
+
+/**
+ * Remember the chosen model across launches.
+ *
+ * This matters more than a convenience. LiteRT-LM cannot reliably load a
+ * second model after closing the first - switching mid-session leaves the
+ * engine unable to invoke, so the fallback is to reopen the app. That is only
+ * a workable answer if the choice survives the restart.
+ */
+export async function loadPreferredModel(): Promise<ModelSpec> {
+  try {
+    const id = await AsyncStorage.getItem(PREF_KEY);
+    if (id) return modelById(id as ModelId);
+  } catch {
+    // Unreadable storage is not worth failing over; fall back to the default.
+  }
+  return modelById(DEFAULT_MODEL_ID);
+}
+
+export async function savePreferredModel(id: ModelId): Promise<void> {
+  try {
+    await AsyncStorage.setItem(PREF_KEY, id);
+  } catch {
+    /* best effort */
+  }
+}
 
 export function modelById(id: ModelId): ModelSpec {
   const m = MODELS.find((x) => x.id === id);
