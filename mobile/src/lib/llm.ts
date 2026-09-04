@@ -41,6 +41,12 @@ export let activeSpec: ModelSpec | null = null;
 /** Tight prompts, short answers. Long generation is where on-device feels slow. */
 const MAX_TOKENS = 150;
 
+/** With reasoning on, the answer needs room AFTER the thinking block. */
+const MAX_TOKENS_THINKING = 640;
+
+/** Ceiling on the reasoning itself, so a think block cannot run away. */
+const THINKING_BUDGET = 384;
+
 /**
  * Session-level, because LiteRT-LM sets temperature at load, not per message.
  * Kept low deliberately: the docs recommend it for schema adherence, and in a
@@ -101,6 +107,7 @@ const DUTY_SCHEMA = JSON.stringify({
 const LOAD_LADDER = [
   { backend: "gpu", maxContextTokens: 4096 },
   { backend: "gpu", maxContextTokens: 2048 },
+  { backend: "cpu", maxContextTokens: 2048 },
   { backend: "cpu", maxContextTokens: 1024 },
 ] as const;
 
@@ -163,6 +170,43 @@ export let thinkingEnabled = false;
 
 export function setThinking(on: boolean) {
   thinkingEnabled = on;
+}
+
+/**
+ * Output budget for one message, and the reasoning allowance with it.
+ *
+ * These have to move together. 150 tokens is right for a grounded answer and
+ * catastrophic with reasoning switched on: the model opens a <think> block,
+ * consumes the whole budget inside it and emits no answer - which is exactly
+ * the failure that made Qwen3-1.7B look broken. Turning reasoning on without
+ * raising the ceiling would rebuild that trap behind a toggle.
+ *
+ * The reasoning allowance is capped rather than left unlimited (-1) because on
+ * a mid-range phone at roughly ten tokens a second, an unbounded think block is
+ * a minute of blank screen.
+ */
+function messageOptions() {
+  if (!thinkingEnabled) {
+    return { maxOutputTokens: MAX_TOKENS, thinking: { enabled: false } };
+  }
+
+  // Reasoning plus answer has to fit the context the model ACTUALLY loaded
+  // with, which the ladder decides at runtime - it can land on cpu/1024 on a
+  // memory-tight phone. Asking for 640 output tokens inside a 1024 window
+  // leaves no room for the prompt, and the request either truncates or fails.
+  // Roughly half the window, less what the prompt needs.
+  const ctx = loadedConfig?.maxContextTokens ?? 4096;
+  const room = Math.max(MAX_TOKENS, Math.floor(ctx / 2) - 128);
+  const out = Math.min(MAX_TOKENS_THINKING, room);
+
+  return {
+    maxOutputTokens: out,
+    // Leave the answer at least MAX_TOKENS after the thinking block.
+    thinking: {
+      enabled: true,
+      tokenBudget: Math.max(64, Math.min(THINKING_BUDGET, out - MAX_TOKENS)),
+    },
+  };
 }
 
 export function loadModel(
@@ -488,7 +532,11 @@ export async function extractDuties(
   // Retry twice, then fall back to keywords.
   for (let attempt = 0; attempt < 2; attempt++) {
     const raw = await model.execute(text(prompt), undefined, {
-      maxOutputTokens: MAX_TOKENS,
+      ...messageOptions(),
+      // Extraction is a copy-out task, not a reasoning one: the clauses are
+      // in the prompt and the answer rearranges them. Reasoning spends time
+      // here without improving the result.
+      thinking: { enabled: false },
       // The engine constrains decoding to this schema, so the response is
       // guaranteed to parse. parseJson below is now a formality, not a hope.
       responseSchema: DUTY_SCHEMA,
@@ -536,7 +584,7 @@ export async function observationFromAudio(
       },
     ],
     undefined,
-    { maxOutputTokens: MAX_TOKENS },
+    messageOptions(),
   );
 }
 
@@ -556,7 +604,7 @@ Write one factual inspection observation, under 40 words, in the third person.${
       clause ? ` End with the citation ${clause.clause_ref}.` : ""
     } No preamble.`),
     undefined,
-    { maxOutputTokens: MAX_TOKENS },
+    messageOptions(),
   );
 }
 
@@ -572,7 +620,7 @@ export async function describePhoto(
       { type: "text", text: `${question} Answer in under 30 words.` },
     ],
     undefined,
-    { maxOutputTokens: MAX_TOKENS },
+    messageOptions(),
   );
 }
 
@@ -599,7 +647,7 @@ In under 40 words: what is happening, why it matters, and what the duty requires
       clause ? ` Cite ${clause.clause_ref}.` : ""
     }`),
     undefined,
-    { maxOutputTokens: MAX_TOKENS },
+    messageOptions(),
   );
 }
 
@@ -728,7 +776,7 @@ appears in brackets above - copy it, do not rewrite it. If the ledger above
 does not contain the answer, say so. Do not use outside knowledge, and never
 state a statute or regulation number that is not listed above.`),
     onToken,
-    { maxOutputTokens: MAX_TOKENS },
+    messageOptions(),
   );
 
   return { answer, unverified: unverifiedCitations(answer, facts) };

@@ -174,6 +174,17 @@ export default function Ask({ lastPhotoUri }: { lastPhotoUri?: string | null }) 
   const [thinking, setThinkingOn] = useState(false);
   thinkingRef.current = thinking;
 
+  /**
+   * Apply the toggle immediately, not just at load.
+   *
+   * Reasoning is set per message as well as per session, so changing your mind
+   * costs nothing - which matters here, because reloading a model to change a
+   * setting would mean restarting the app (see switchModel in llm.ts).
+   */
+  useEffect(() => {
+    llmModule?.setThinking?.(thinking);
+  }, [thinking]);
+
   /** Camera capture, for asking the model about something in front of you. */
   const [camOpen, setCamOpen] = useState(false);
   const [camPerm, requestCamPerm] = useCameraPermissions();
@@ -565,6 +576,15 @@ export default function Ask({ lastPhotoUri }: { lastPhotoUri?: string | null }) 
       {/* Switch model mid-conversation. switchModel() closes the resident one
           first, so both are never in memory at once. */}
       <View style={s.switcher}>
+        <TouchableOpacity
+          style={[s.thinkPill, thinking && s.thinkPillOn]}
+          onPress={() => setThinkingOn((v) => !v)}
+          disabled={busy}
+        >
+          <Text style={[s.thinkPillText, thinking && s.switchTextOn]}>
+            {thinking ? "REASONING" : "FAST"}
+          </Text>
+        </TouchableOpacity>
         {MODELS.map((m) => {
           const on = (llmModule?.activeSpec?.id ?? activeId) === m.id;
           return (
@@ -792,6 +812,12 @@ const s = StyleSheet.create({
   switchBtnOn: { backgroundColor: C.accent, borderColor: C.accent },
   switchText: { fontSize: 11, color: C.inkSoft },
   switchTextOn: { color: "#fff", fontWeight: "700" },
+  thinkPill: {
+    paddingVertical: 6, paddingHorizontal: 10, borderRadius: 6,
+    borderWidth: 1, borderColor: C.line, justifyContent: "center",
+  },
+  thinkPillOn: { backgroundColor: C.warn, borderColor: C.warn },
+  thinkPillText: { fontSize: 10, fontWeight: "700", color: C.inkSoft, letterSpacing: 0.4 },
 
   // ---- voice / camera ----
   iconBtn: {
