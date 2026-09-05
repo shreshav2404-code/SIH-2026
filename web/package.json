@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "typecheck": "tsc -b --noEmit",
+    "check": "npm run typecheck && npm run lint"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.102.8",

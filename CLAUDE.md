@@ -201,6 +201,5 @@ Performance (Google's numbers, S26 Ultra): GPU 710 MB / 22.1 tok/s decode / 0.8s
 Nothing here costs money. The model runs on the phone/emulator; Postgres, FastAPI and the dashboard run on your own laptop under Docker; maps use OpenStreetMap. The only future-only costs (NOT needed for the demo): Google Play Store listing (~₹2,000 one-time) and cloud hosting (optional, only if you ever want public URLs). For SIH: ₹0.
 
 ## Attribution for commits
-```
-Co-Authored-By: Claude <noreply@anthropic.com>
-```
+Commits carry no co-author trailer. The work is the team's and the history
+should read that way.
