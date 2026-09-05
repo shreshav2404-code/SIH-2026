@@ -37,6 +37,10 @@ import { counts } from "./src/lib/db";
 import Ask from "./src/screens/Ask";
 import Capture from "./src/screens/Capture";
 import Duties from "./src/screens/Duties";
+import DirectiveBanner from "./src/components/DirectiveBanner";
+import Headframe from "./src/components/Headframe";
+import ScreenHero from "./src/components/ScreenHero";
+import { UNDERGROUND_PHOTO } from "./src/lib/photos";
 import { TabBoundary } from "./src/components/TabBoundary";
 import Sensors from "./src/screens/Sensors";
 import Sync from "./src/screens/Sync";
@@ -115,6 +119,7 @@ function AppInner() {
       <StatusBar style="light" />
 
       <View style={[s.header, { paddingTop: insets.top + 12 }]}>
+        <Headframe size={30} />
         <View style={{ flex: 1 }}>
           <Text style={s.headerTitle}>
             {tab === "duties"
@@ -134,6 +139,10 @@ function AppInner() {
         <View style={[s.dot, { backgroundColor: online ? "#4ade80" : "#fbbf24" }]} />
         <Text style={s.headerNet}>{online ? "Online" : "No signal"}</Text>
       </View>
+
+      {/* Above everything, on every tab. A withdrawal order that only shows on
+          the right screen is not a withdrawal order. */}
+      <DirectiveBanner online={online} />
 
       {!online && queued > 0 && tab === "duties" && (
         <View style={s.offline}>
@@ -168,8 +177,18 @@ function AppInner() {
               }}
             />
           ) : (
-            <View style={s.centre}>
-              <Text style={s.dim}>Pick a duty from the list to capture it.</Text>
+            // The capture tab with nothing selected was a line of grey text on
+            // an empty screen. It is the second tab an officer lands on, so it
+            // now says what the tab is FOR rather than only what is missing.
+            <View style={{ flex: 1 }}>
+              <ScreenHero
+                photo={UNDERGROUND_PHOTO}
+                title="Capture evidence"
+                subtitle="geo-tagged, hashed on capture, queued if there is no signal"
+              />
+              <View style={s.centre}>
+                <Text style={s.dim}>Pick a duty from the list to capture it.</Text>
+              </View>
             </View>
           ))}
         {/* These two depend on native modules (LiteRT-LM, expo-sensors,
@@ -191,6 +210,9 @@ function AppInner() {
       <View style={[s.tabs, { paddingBottom: insets.bottom }]}>
         {(["duties", "capture", "ask", "sensors", "sync"] as Tab[]).map((t) => (
           <TouchableOpacity key={t} style={s.tab} onPress={() => setTab(t)}>
+            {/* A bar above the label rather than colour alone - colour is the
+                first thing a projector washes out, and the demo runs on one. */}
+            <View style={[s.tabMark, tab === t && s.tabMarkOn]} />
             <Text style={[s.tabText, tab === t && s.tabActive]}>
               {t.toUpperCase()}
               {t === "sync" && queued > 0 ? ` (${queued})` : ""}
@@ -314,7 +336,7 @@ const s = StyleSheet.create({
   appDark: { flex: 1, backgroundColor: C.header },
   centre: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
   header: {
-    flexDirection: "row", alignItems: "center", gap: 6,
+    flexDirection: "row", alignItems: "center", gap: 10,
     backgroundColor: C.header, paddingHorizontal: 16, paddingVertical: 12,
   },
   headerTitle: { color: "#fff", fontSize: 18, fontWeight: "700" },
@@ -327,7 +349,9 @@ const s = StyleSheet.create({
     flexDirection: "row", borderTopWidth: 1, borderTopColor: C.line,
     backgroundColor: C.panel,
   },
-  tab: { flex: 1, paddingVertical: 12, alignItems: "center" },
+  tab: { flex: 1, paddingTop: 8, paddingBottom: 12, alignItems: "center", gap: 6 },
+  tabMark: { height: 3, width: 22, borderRadius: 2, backgroundColor: "transparent" },
+  tabMarkOn: { backgroundColor: C.accent },
   tabText: { fontSize: 12, fontWeight: "700", color: C.inkSoft, letterSpacing: 0.5 },
   tabActive: { color: C.accent },
   brand: { fontSize: 28, fontWeight: "700", color: C.ink, letterSpacing: 1 },

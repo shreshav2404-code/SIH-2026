@@ -155,6 +155,11 @@ class SensorReading(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     mine_id: Mapped[int] = mapped_column(ForeignKey("mine.id"), index=True)
     sensor_type: Mapped[str] = mapped_column(String(32), index=True)
+    # WHERE the reading was taken. Regulation names places - the methane limit
+    # applies in the general body of return air of a district, not "in the
+    # mine" - so a reading without one cannot be acted on. Nullable because
+    # historical rows predate the column. See services/locations.py.
+    location: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     value: Mapped[float] = mapped_column(Float)
     unit: Mapped[str] = mapped_column(String(16))
     recorded_at: Mapped[datetime] = mapped_column(
@@ -180,6 +185,7 @@ class Alert(Base):
 
     severity: Mapped[str] = mapped_column(String(16), index=True)
     message: Mapped[str] = mapped_column(Text)
+    location: Mapped[str | None] = mapped_column(String(64), nullable=True)
     source: Mapped[str] = mapped_column(String(16), default="rule")
 
     # Stored, not derived. The threshold table knows which clause a breach
@@ -286,5 +292,43 @@ class FineTuneJob(Base):
         DateTime(timezone=True), server_default=func.now()
     )
     updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+
+class Directive(Base):
+    """An instruction from the control room to the people underground.
+
+    The alert is arithmetic: a threshold was crossed. The DIRECTIVE is a human
+    decision about it - stop work, ventilate, evacuate - issued by a named
+    person and acknowledged by a named person. Keeping them as separate rows is
+    the point: an alert nobody acted on and an alert somebody stood down look
+    completely different in an inquiry, and only this table records which.
+
+    `acknowledged_at` closes the loop. Until it is set, the officer's handset
+    keeps showing the directive.
+    """
+
+    __tablename__ = "directive"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    mine_id: Mapped[int] = mapped_column(ForeignKey("mine.id"), index=True)
+    alert_id: Mapped[int | None] = mapped_column(ForeignKey("alert.id"), nullable=True)
+    issued_by: Mapped[int] = mapped_column(ForeignKey("app_user.id"))
+
+    severity: Mapped[str] = mapped_column(String(16))
+    location: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    message: Mapped[str] = mapped_column(Text)
+    # A short verb the handset can render as a banner: STOP_WORK, EVACUATE,
+    # VENTILATE, INSPECT. Free text lives in `message`.
+    action: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), index=True
+    )
+    acknowledged_by: Mapped[int | None] = mapped_column(
+        ForeignKey("app_user.id"), nullable=True
+    )
+    acknowledged_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )

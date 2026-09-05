@@ -14,6 +14,21 @@ import { Badge, Empty, Panel } from "../lib/ui";
  * doing nothing observable would be worse than no button.
  */
 
+/**
+ * Bases this project has actually used or evaluated.
+ *
+ * Was a free-text input defaulting to "Granite 4.0 350M" - a leftover from an
+ * early shortlist. Nothing in this project trains Granite, and a page a judge
+ * reads should not name a model the system has never run. The fine-tune that
+ * ships is Gemma 3 270M, trained by tools/train.py into ANUPALAN 270M, so that
+ * is the default and the list is closed.
+ */
+const BASE_MODELS = [
+  "Gemma 3 270M (shipped as ANUPALAN 270M)",
+  "Qwen3 1.7B",
+  "LFM2.5-VL 450M",
+];
+
 type Kind = "duties" | "observations";
 
 interface Preview {
@@ -49,7 +64,7 @@ export default function FineTune() {
 
   const [kind, setKind] = useState<Kind>("duties");
   const [name, setName] = useState("duties-v1");
-  const [baseModel, setBaseModel] = useState("Qwen3-1.7B");
+  const [baseModel, setBaseModel] = useState(BASE_MODELS[0]);
 
   const { data: preview } = useQuery({
     queryKey: ["ft-preview", kind, mineId],
@@ -172,11 +187,15 @@ export default function FineTune() {
           </label>
           <label className="text-[11px] text-[var(--ink-soft)]">
             Base model
-            <input
+            <select
               value={baseModel}
               onChange={(e) => setBaseModel(e.target.value)}
               className="mt-1 block rounded border border-[var(--line)] px-2 py-1 text-[12px]"
-            />
+            >
+              {BASE_MODELS.map((m) => (
+                <option key={m}>{m}</option>
+              ))}
+            </select>
           </label>
           <button
             type="button"
@@ -247,7 +266,7 @@ export default function FineTune() {
           <li>Download the .jsonl above and register a run.</li>
           <li>
             Open a free Colab GPU notebook and install Unsloth, which fits a
-            1.7B LoRA in the free tier&rsquo;s memory.
+            350M LoRA in the free tier&rsquo;s memory several times over.
           </li>
           <li>
             Train a LoRA adapter — a few hundred examples needs only a couple of

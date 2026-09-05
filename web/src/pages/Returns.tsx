@@ -5,6 +5,8 @@ import { api, openReport } from "../api/client";
 import type { StatutoryReturn } from "../api/types";
 import { useAuth } from "../lib/auth";
 import { Badge, Clause, Empty, Panel } from "../lib/ui";
+import seamBg from "../assets/photos/seam-wide.jpg";
+import PageHero from "../lib/PageHero";
 
 export default function Returns() {
   const qc = useQueryClient();
@@ -48,7 +50,18 @@ export default function Returns() {
   const canSign = user?.role === "mine_manager";
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[280px_1fr]">
+    <div className="grid gap-4">
+      <PageHero
+        image={seamBg}
+        eyebrow="Statutory returns"
+        title="Drafted here, filed by a certificated officer"
+      >
+        Every return leaves this system stamped DRAFT — NOT FILED. It reaches
+        the DGMS because someone signed it, never because software decided it
+        was ready.
+      </PageHero>
+
+      <div className="grid gap-4 lg:grid-cols-[280px_1fr]">
       <Panel
         title="Returns"
             right={
@@ -169,6 +182,7 @@ export default function Returns() {
           <Empty>Draft a return to see it here.</Empty>
         </Panel>
       )}
+      </div>
     </div>
   );
 }

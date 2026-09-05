@@ -137,12 +137,12 @@ is easy to misread.
 
 `anupalan_pixel7pro` is created with `system-images;android-35;google_apis;arm64-v8a`
 and `D:\Android\avd\anupalan_pixel7pro.avd\config.ini` edited from the
-defaults, which cannot hold Gemma 4 E4B:
+defaults, which the stock sizes cannot hold:
 
 | setting | default | set to | why |
 |---|---|---|---|
-| `hw.ramSize` | 1536M | **6144M** | 3.3 GB of weights on the CPU path |
-| `disk.dataPartition.size` | 800M | **14G** | the model file alone is 3.66 GB |
+| `hw.ramSize` | 1536M | **6144M** | headroom for the CPU path and the KV cache |
+| `disk.dataPartition.size` | 800M | **14G** | the APK plus the models extracted beside it |
 | `vm.heapSize` | 384M | **1024M** | |
 
 The GPU backend is unavailable in an emulator regardless of image, so expect
@@ -239,14 +239,15 @@ Sensors tabs are wrapped, so an older build shows an explanation in the tab
 instead of refusing to open. That is a safety net, not a substitute — those
 tabs only work after a native rebuild.
 
-## 9. Both models ship, so the APK is ~3.5 GB
+## 9. All three models ship, so the APK is ~1.1 GB
 
-`models/` must contain **exactly** the two files listed in `expectedModels` in
+`models/` must contain **exactly** the three files listed in `expectedModels` in
 `app/build.gradle`, which mirrors `MODELS` in `src/lib/modelSource.ts`:
 
 ```
-Qwen3-1.7B_dynamic_wi4b32_afp32.litertlm     977,184,032 bytes
-gemma-4-E2B-it.litertlm                    2,588,147,712 bytes
+granite-4.0-h-350m_int8_gpu.litertlm    481,218,880 bytes
+SmolLM2_360M_instruct.litertlm          373,719,040 bytes
+LFM2.5-230M_int4.litertlm               176,756,720 bytes
 ```
 
 Gradle fails the build if one is missing (a model the app cannot find at
@@ -273,25 +274,33 @@ The message is misleading twice over: it names `index.android.bundle`, which is
 2 MB and entirely innocent — that file merely happens to be the entry that
 lands past the boundary — and it says nothing about size.
 
-**Budget.** Roughly 250 MB goes to code, native libraries and resources, so the
-weights must stay under about **3.7 GB**. Current set:
+**Budget.** Roughly 250 MB goes to code, native libraries and resources. The
+weights now total well under any limit that matters:
 
 ```
-gemma-4-E4B-it-gpu.litertlm          2.77 GB
-LFM2.5-1.2B-Instruct_int4.litertlm   0.69 GB
-                                     ------
-                                     3.46 GB  ->  APK ~3.70 GB
+granite-4.0-h-350m_int8_gpu.litertlm   459 MB
+SmolLM2_360M_instruct.litertlm         356 MB
+LFM2.5-230M_int4.litertlm              169 MB
+                                       ------
+                                       984 MB  ->  APK ~1.1 GB
 ```
 
-Qwen2.5-1.5B (1.49 GB) is verified and kept in `models-archive/`, but E4B plus
-Qwen2.5 is 4.26 GB and does not fit. So is E2B plus Qwen2.5, at 3.90 GB before
-code. Either pairing means dropping the multimodal model — no speech, no
-photographs — which is the demo this whole system is built around.
+**The 4 GiB ZIP32 ceiling is real and its error message lies.** An APK is a
+ZIP32 archive with a hard 4,294,967,295-byte limit. Exceeding it fails with
 
-**Use the GPU variants.** `gemma-4-E4B-it-gpu.litertlm` is 2.97 GB against the
-generic build's 3.66 GB, and the phone loads Gemma on the GPU path regardless.
-That 640 MB is the difference between E4B fitting and not: the generic build
-was refused by the pre-flight memory check for being ~62 MB short.
+    Zip32 cannot place CD entry 'assets/index.android.bundle' payload at
+    5453573896 (MAX=4294967295)
+
+which names the innocent 2 MB JavaScript bundle, not the models that filled the
+archive. At 984 MB this is no longer close, but the trap is worth knowing before
+anyone adds a model back.
+
+**Check the merged assets, not just `models/`.** After the set was cut from four
+models to three, `build/intermediates/assets/release/mergeReleaseAssets/` still
+held a complete Qwen2.5 and Falcon-H1 — 2.3 GB that would have shipped with
+nothing referencing them. The build guard in `app/build.gradle` only inspected
+the source directory and saw nothing wrong. It now sweeps the merged directory
+before packaging.
 
 **Do the arithmetic before building.** The package step takes about twelve
 minutes to reach the point where it fails.

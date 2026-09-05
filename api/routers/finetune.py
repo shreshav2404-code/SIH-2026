@@ -23,12 +23,12 @@ from sqlalchemy.orm import Session
 
 from auth import current_user, resolve_mine_id
 from db import get_db
-from models import Evidence, FineTuneJob, Obligation, Statute, User
+from models import Alert, Evidence, FineTuneJob, Obligation, Statute, User
 
 router = APIRouter(prefix="/finetune", tags=["finetune"])
 
 
-DATASET_KINDS = {"duties", "observations"}
+DATASET_KINDS = {"duties", "observations", "ledger", "sensors", "all"}
 
 
 def _duty_examples(db: Session, mine_id: int) -> list[dict]:
@@ -120,9 +120,221 @@ def _observation_examples(db: Session, mine_id: int) -> list[dict]:
     return out
 
 
+# Question shapes an officer actually types, crossed with the rows the app
+# would have retrieved for each. The point is not variety for its own sake: the
+# app answers arbitrary phrasing, so the model has to have seen the same facts
+# asked for in several ways.
+_LEDGER_QUESTIONS = [
+    "what is overdue and who owns it",
+    "what is overdue",
+    "who owns the overdue duties",
+    "what should I do first",
+    "which duties are late",
+    "what is outstanding",
+    "list the overdue work",
+    "anything overdue today",
+]
+
+_ROLE_QUESTIONS = [
+    "what has the {role} got outstanding",
+    "what does the {role} owe",
+    "anything pending for the {role}",
+]
+
+
+def _fmt_rows(rows: list[tuple]) -> str:
+    """The ledger block EXACTLY as llm.ts builds it.
+
+    Training on a different shape to the one used at inference teaches the
+    model a job it will never be asked to do. The grouping, the wording of the
+    heading and the trailing summary line all mirror askLedger().
+    """
+    by_status: dict[str, list] = {}
+    for o, s in rows:
+        by_status.setdefault((o.status or "other").lower(), []).append((o, s))
+
+    order = ["overdue", "due", "pending", "verified"]
+    keys = sorted(by_status, key=lambda k: order.index(k) if k in order else 99)
+
+    blocks = []
+    for k in keys:
+        items = by_status[k]
+        body = "\n".join(
+            f"  - {o.title}, owned by {o.owner_role}, due {o.due_date or 'not set'}"
+            for o, _ in items
+        )
+        blocks.append(f"{k.upper()} ({len(items)}):\n{body}")
+
+    table = "\n\n".join(blocks)
+    n_overdue = len(by_status.get("overdue", []))
+    summary = (
+        f"\n\n{n_overdue} of the duties listed are OVERDUE."
+        if n_overdue
+        else "\n\nNo duty listed is overdue."
+    )
+    return table + summary
+
+
+def _answer_for(question: str, rows: list[tuple]) -> str:
+    """The answer we WANT - written by code, so it is correct by construction.
+
+    This is the whole trick of the dataset: the app already knows the answer
+    before it calls the model, so the target output can be generated rather
+    than hand-written. The model is being taught to phrase what the ledger
+    already says, not to work it out.
+    """
+    overdue = [(o, s) for o, s in rows if (o.status or "").lower() == "overdue"]
+    if not overdue:
+        return "Nothing in this list is overdue."
+
+    parts = [
+        f"{o.title} ({o.owner_role}, due {o.due_date})" for o, _ in overdue
+    ]
+    if len(parts) == 1:
+        return f"One duty is overdue: {parts[0]}."
+    return (
+        f"{len(parts)} duties are overdue: "
+        + "; ".join(parts[:-1])
+        + f"; and {parts[-1]}."
+    )
+
+
+def _ledger_examples(db: Session, mine_id: int) -> list[dict]:
+    """Ledger question answering - the task the app performs most often.
+
+    Absent from this file until now, which mattered: fine-tuning on clause
+    extraction and observation drafting would not have touched the behaviour
+    that actually fails, which is reading a handful of rows and answering a
+    question about them.
+    """
+    rows = db.execute(
+        select(Obligation, Statute)
+        .join(Statute, Statute.id == Obligation.statute_id)
+        .where(Obligation.mine_id == mine_id)
+    ).all()
+    if not rows:
+        return []
+
+    # MAX_FACTS in Ask.tsx. Windows of this size are what the model will see.
+    window = 4
+    out: list[dict] = []
+
+    # Overdue first, exactly as rankDuties() orders them.
+    ranked = sorted(rows, key=lambda r: (r[0].status or "") != "overdue")
+
+    for start in range(0, max(1, len(ranked) - window + 1)):
+        subset = ranked[start : start + window]
+        if not subset:
+            continue
+        table = _fmt_rows(subset)
+        for q in _LEDGER_QUESTIONS:
+            out.append(
+                {
+                    "messages": [
+                        {"role": "user", "content": f"{table}\n\n{q}"},
+                        {"role": "assistant", "content": _answer_for(q, subset)},
+                    ]
+                }
+            )
+
+    # Role-specific questions, answered from the same windows.
+    roles = {o.owner_role for o, _ in rows if o.owner_role}
+    for role in roles:
+        owned = [(o, s) for o, s in ranked if o.owner_role == role][:window]
+        if not owned:
+            continue
+        table = _fmt_rows(owned)
+        titles = ", ".join(o.title for o, _ in owned)
+        for tmpl in _ROLE_QUESTIONS:
+            out.append(
+                {
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": f"{table}\n\n{tmpl.format(role=role)}",
+                        },
+                        {
+                            "role": "assistant",
+                            "content": f"The {role} has {len(owned)} duty(s): {titles}.",
+                        },
+                    ]
+                }
+            )
+    return out
+
+
+def _sensor_of(message: str) -> str:
+    """The sensor name, taken from the alert text.
+
+    Alert has no sensor_type column - the threshold table writes the reading
+    into the message ("pm10 102.278ug/m3 exceeds ...") and the first word is
+    the sensor. Parsing it here keeps the training prompt in the same shape as
+    explainWindow() builds at inference.
+    """
+    first = (message or "").strip().split(" ")
+    return first[0] if first and first[0] else "reading"
+
+
+def _sensor_examples(db: Session, mine_id: int) -> list[dict]:
+    """Sensor-window interpretation, in explainWindow()'s exact prompt shape.
+
+    The breach itself is decided by arithmetic on the backend and never by the
+    model - these examples teach it to EXPLAIN a decision already made, which
+    is the only thing it is trusted with here.
+    """
+    rows = db.scalars(
+        select(Alert)
+        .where(Alert.mine_id == mine_id)
+        .order_by(Alert.created_at.desc())
+        .limit(60)
+    ).all()
+
+    out: list[dict] = []
+    for a in rows:
+        if not a.message:
+            continue
+        cite = f" Cite {a.clause_ref}." if a.clause_ref else ""
+        grounding = (
+            f"Governing clause [{a.clause_ref}]: {a.message}\n\n"
+            if a.clause_ref
+            else ""
+        )
+        prompt = (
+            f"{grounding}Sensor: {_sensor_of(a.message)}\n"
+            f"{a.message}\n\n"
+            "In under 40 words: what is happening, why it matters, and what "
+            f"the duty requires.{cite}"
+        )
+        answer = a.message.strip()
+        if a.clause_ref:
+            answer = f"{answer} This is governed by {a.clause_ref}."
+        out.append(
+            {
+                "messages": [
+                    {"role": "user", "content": prompt},
+                    {"role": "assistant", "content": answer},
+                ]
+            }
+        )
+    return out
+
+
 def _build(db: Session, mine_id: int, kind: str) -> list[dict]:
     if kind == "duties":
         return _duty_examples(db, mine_id)
+    if kind == "ledger":
+        return _ledger_examples(db, mine_id)
+    if kind == "sensors":
+        return _sensor_examples(db, mine_id)
+    if kind == "all":
+        # Everything the app asks the model to do, in one file. This is the
+        # set to train on if the tuned model is to become the default.
+        return (
+            _ledger_examples(db, mine_id)
+            + _sensor_examples(db, mine_id)
+            + _observation_examples(db, mine_id)
+            + _duty_examples(db, mine_id)
+        )
     if kind == "observations":
         return _observation_examples(db, mine_id)
     raise HTTPException(status_code=400, detail=f"unknown dataset kind: {kind}")

@@ -87,7 +87,8 @@ async def upload_evidence(
     )
 
     chain_hash = compute_chain_hash(
-        prev or GENESIS, photo_sha, lat, lon, captured_at, obligation_id
+        prev or GENESIS, photo_sha, lat, lon, captured_at, obligation_id,
+        observation,
     )
 
     ev = Evidence(

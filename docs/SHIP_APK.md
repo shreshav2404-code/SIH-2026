@@ -1,6 +1,6 @@
 # Shipping the APK to a phone
 
-A **release** APK with Gemma 4 E4B and LFM2.5 inside it: one file, install it on any
+A **release** APK with three small models inside it (984 MB total): one file, install it on any
 arm64 Android phone, and the on-device model works with no cable and no laptop.
 
 > **The debug APK on the emulator is not this.** A debug build fetches its
@@ -35,13 +35,13 @@ bundleModel=true
 def bundleModel = (findProperty('bundleModel') ?: 'false').toBoolean()
 def modelDir = file("${projectRoot}/../models")
 
-if (bundleModel && !file("${modelDir}/gemma-4-E4B-it-gpu.litertlm").exists()) {
+if (bundleModel && !file("${modelDir}/granite-4.0-h-350m_int8_gpu.litertlm").exists()) {
     throw new GradleException("bundleModel=true but no model at ${modelDir}")
 }
 
 android {
     // RELEASE source set only. src/main would package the model into debug
-    // builds too and make every emulator iteration 3.9 GB.
+    // builds too and make every emulator iteration far heavier.
     sourceSets {
         release {
             if (bundleModel) {
@@ -59,7 +59,7 @@ android {
 ```
 
 **Do not use a `Copy` task for this.** It was the obvious approach and it is
-wrong twice over: it duplicates 3.66 GB on disk, and it writes into a directory
+wrong twice over: it duplicates the whole model set on disk, and it writes into a directory
 that the lint, merge and package tasks all read, which Gradle rejects —
 
 ```
@@ -99,10 +99,10 @@ Gradle cannot be driven from a Claude shell on this machine (see
 Output:
 
 ```
-mobile/android/app/build/outputs/apk/release/app-release.apk    ~2.8 GB
+mobile/android/app/build/outputs/apk/release/app-release.apk    ~1.1 GB
 ```
 
-**Expect this to take a while.** It repackages 3.46 GB. Building a debug APK
+**Expect this to take a while.** It repackages ~1 GB. Building a debug APK
 afterwards is unaffected — debug ignores the model entirely.
 
 ---
@@ -118,7 +118,7 @@ adb install -r "D:/anupalan/mobile/android/app/build/outputs/apk/release/app-rel
 **Without a cable** — copy the APK to the phone (USB storage, Drive, a
 transfer app), open it in Files, allow "install unknown apps" when prompted.
 
-The phone needs roughly **6 GB free**: the APK, plus the model extracted to app
+The phone needs roughly **2.5 GB free**: the APK, plus the models extracted to app
 storage on first launch.
 
 ---
@@ -144,7 +144,7 @@ tap `change`, type the address, and it is saved on the device.
 
 That matters because the laptop's IP moves: it was `192.168.1.36` and DHCP has
 since made it `192.168.1.101`. Baking it in meant a rebuild that repackages
-2.59 GB of model to change one string, once per teammate.
+a gigabyte of model to change one string, once per teammate.
 
 Find the current address with `ipconfig`, or:
 
@@ -176,10 +176,11 @@ breaks nothing that matters.
 - [ ] `bundleModel=true` in `android/gradle.properties`
 - [ ] copy task + `noCompress` in `android/app/build.gradle`
 - [ ] `models/` holds **exactly two** `.litertlm` files —
-      `gemma-4-E4B-it-gpu.litertlm` (2,969,059,328 bytes) and
-      `LFM2.5-1.2B-Instruct_int4.litertlm` (736,015,744). Spare weights live in
+      `granite-4.0-h-350m_int8_gpu.litertlm` (481,218,880 bytes),
+      `SmolLM2_360M_instruct.litertlm` (373,719,040) and
+      `LFM2.5-230M_int4.litertlm` (176,756,720). Spare weights live in
       `models-archive/` — the whole
       `models/` directory is an asset source, so a second file doubles the APK
 - [ ] Server address set on the sign-in screen (no rebuild needed)
 - [ ] Build variant set to **release** in Android Studio
-- [ ] ~8 GB free on the phone
+- [ ] ~2.5 GB free on the phone

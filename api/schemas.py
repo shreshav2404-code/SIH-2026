@@ -78,6 +78,19 @@ class ObligationCreate(BaseModel):
 
 
 class ObligationPatch(BaseModel):
+    """Every field a supervisor may change from the dashboard.
+
+    Widened from status/due_date alone so a duty can actually be REASSIGNED -
+    owner_role is the field that makes "assign this to the Ventilation Officer"
+    possible, and it was the one missing. statute_id and mine_id are
+    deliberately absent: re-pointing a duty at a different clause or a
+    different mine is not an edit, it is a different duty.
+    """
+
+    title: str | None = None
+    owner_role: str | None = None
+    frequency: str | None = None
+    evidence_type: str | None = None
     status: str | None = None
     due_date: date | None = None
 
@@ -167,6 +180,9 @@ class ReadingIn(BaseModel):
     value: float
     unit: str
     recorded_at: datetime
+    # Optional so the existing simulator and any plant gateway keep working
+    # unchanged, but everything new should send it. See services/locations.py.
+    location: str | None = None
 
 
 class ReadingsIn(BaseModel):
@@ -180,6 +196,7 @@ class ReadingOut(BaseModel):
     value: float
     unit: str
     recorded_at: datetime
+    location: str | None = None
 
 
 class WindowStats(BaseModel):
@@ -213,6 +230,7 @@ class AlertOut(BaseModel):
     severity: str
     message: str
     clause_ref: str | None = None
+    location: str | None = None
     source: str
     created_at: datetime
     acknowledged_by: int | None = None
@@ -290,3 +308,36 @@ class ReturnOut(BaseModel):
 
 
 ObligationDetail.model_rebuild()
+
+
+# ------------------------------------------------------------- directives
+
+
+class DirectiveCreate(BaseModel):
+    """What the control room sends underground.
+
+    `alert_id` is optional: most directives answer an alert, but a manager may
+    also raise one from a phone call or a shift report, and refusing that would
+    just push it outside the system where nothing records it.
+    """
+
+    message: str
+    severity: str = "critical"
+    action: str | None = None
+    alert_id: int | None = None
+    location: str | None = None
+
+
+class DirectiveOut(BaseModel):
+    id: int
+    mine_id: int
+    alert_id: int | None
+    severity: str
+    location: str | None
+    location_label: str | None
+    message: str
+    action: str | None
+    created_at: datetime
+    issued_by_name: str | None
+    acknowledged_at: datetime | None
+    acknowledged_by_name: str | None

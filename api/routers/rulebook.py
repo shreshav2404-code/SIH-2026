@@ -140,3 +140,21 @@ def store_duties(
 
     db.commit()
     return DutiesOut(created=created, rejected=rejected)
+
+
+@router.get("/statutes")
+def list_statutes(
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+) -> list[dict]:
+    """The clause corpus, for pickers.
+
+    Text is deliberately omitted - this feeds a dropdown, and shipping 50 full
+    clause bodies to render 50 <option> labels is bandwidth spent on nothing.
+    Fetch the clause itself from /rulebook/retrieve when it is actually read.
+    """
+    rows = db.scalars(select(Statute).order_by(Statute.act, Statute.clause_ref)).all()
+    return [
+        {"id": r.id, "act": r.act, "clause_ref": r.clause_ref, "title": r.title}
+        for r in rows
+    ]

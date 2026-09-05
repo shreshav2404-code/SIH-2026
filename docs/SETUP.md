@@ -154,7 +154,10 @@ The SIH documents stay in `D:\chodu sih`. Claude will set this up.
 
 ## Later (not now)
 
-- Gemma 4 E4B model file (3.66 GB) → save to `D:\anupalan\models\`
+- Three model files (984 MB total) -> save to `D:\anupalan\models\`:
+  `granite-4.0-h-350m_int8_gpu.litertlm` (481,218,880 bytes),
+  `SmolLM2_360M_instruct.litertlm` (373,719,040),
+  `LFM2.5-230M_int4.litertlm` (176,756,720)
 - Google AI Edge Gallery on the S24+ (Play Store) — validate the model in airplane mode
 - arm64-v8a emulator image (only if you want to dev without the phone)
 

@@ -31,7 +31,7 @@
     },
     "plugins": [
       "expo-sqlite",
-      "react-native-litert-lm",
+      "llama.rn",
       [
         "expo-camera",
         {

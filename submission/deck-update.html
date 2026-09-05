@@ -1,0 +1,666 @@
+<title>ANUPALAN Deck Deltas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bitter:wght@500;600;700&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+
+<style>
+  /* ANUPALAN's own tokens - this document belongs to the product, so it uses
+     the product's palette rather than inventing a second identity. */
+  :root {
+    --ink: #0f2942;
+    --ink-soft: #4a6580;
+    --line: #dbe4ed;
+    --ground: #eef2f6;
+    --panel: #ffffff;
+    --accent: #14539a;
+    --accent-soft: #e7f0fb;
+    --ok: #17734a;
+    --ok-soft: #e6f3ec;
+    --warn: #9a5c00;
+    --warn-soft: #fdf3e2;
+    --crit: #b3261e;
+    --crit-soft: #fdeceb;
+    --shadow: 0 1px 2px rgba(15, 41, 66, .06), 0 8px 24px -12px rgba(15, 41, 66, .18);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ink: #e6eef7;
+      --ink-soft: #94aac2;
+      --line: #21354b;
+      --ground: #0a1622;
+      --panel: #101f30;
+      --accent: #6aa9e8;
+      --accent-soft: #14293f;
+      --ok: #58c795;
+      --ok-soft: #10261d;
+      --warn: #e0a94b;
+      --warn-soft: #2a1f0c;
+      --crit: #f08a80;
+      --crit-soft: #2c1413;
+      --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px -12px rgba(0, 0, 0, .6);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ink: #e6eef7;
+    --ink-soft: #94aac2;
+    --line: #21354b;
+    --ground: #0a1622;
+    --panel: #101f30;
+    --accent: #6aa9e8;
+    --accent-soft: #14293f;
+    --ok: #58c795;
+    --ok-soft: #10261d;
+    --warn: #e0a94b;
+    --warn-soft: #2a1f0c;
+    --crit: #f08a80;
+    --crit-soft: #2c1413;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px -12px rgba(0, 0, 0, .6);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: "Source Sans 3", ui-sans-serif, system-ui, sans-serif;
+    font-size: 16px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: 40px 24px 96px;
+    display: flex;
+    flex-direction: column;
+    gap: 40px;
+  }
+
+  /* ---------- masthead ---------- */
+  .masthead {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 20px;
+    border-bottom: 3px solid var(--ink);
+    padding-bottom: 18px;
+  }
+  .eyebrow {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11px;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0 0 6px;
+  }
+  h1 {
+    font-family: "Bitter", Georgia, serif;
+    font-weight: 700;
+    font-size: clamp(30px, 4.4vw, 44px);
+    line-height: 1.08;
+    letter-spacing: -.015em;
+    margin: 0;
+    text-wrap: balance;
+  }
+  .standfirst {
+    margin: 10px 0 0;
+    max-width: 62ch;
+    color: var(--ink-soft);
+    font-size: 16.5px;
+  }
+  .stamp {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11.5px;
+    line-height: 1.7;
+    color: var(--ink-soft);
+    text-align: right;
+    white-space: nowrap;
+  }
+  .stamp b { color: var(--ink); font-weight: 500; }
+
+  /* ---------- section ---------- */
+  section { display: flex; flex-direction: column; gap: 16px; }
+  h2 {
+    font-family: "Bitter", Georgia, serif;
+    font-size: 21px;
+    font-weight: 600;
+    letter-spacing: -.01em;
+    margin: 0;
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+  }
+  h2::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--line);
+  }
+  .lede { margin: -4px 0 0; max-width: 66ch; color: var(--ink-soft); font-size: 15px; }
+
+  /* ---------- figures ---------- */
+  .figures {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 1px;
+    background: var(--line);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .fig { background: var(--panel); padding: 16px 18px; display: flex; flex-direction: column; gap: 3px; }
+  .fig .n {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 25px;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -.02em;
+  }
+  .fig .k {
+    font-size: 12px;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+  }
+  .fig .s { font-size: 13px; color: var(--ink-soft); }
+  .fig.good .n { color: var(--ok); }
+  .fig.bad .n { color: var(--crit); }
+
+  /* ---------- change entries ---------- */
+  .entries { display: flex; flex-direction: column; gap: 10px; }
+  .entry {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 15px 18px 16px;
+    display: grid;
+    grid-template-columns: 132px 1fr;
+    gap: 4px 20px;
+    box-shadow: var(--shadow);
+  }
+  .entry > .tags { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+  .entry > .body { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  .entry h3 {
+    margin: 0;
+    font-family: "Bitter", Georgia, serif;
+    font-size: 16.5px;
+    font-weight: 600;
+    line-height: 1.3;
+  }
+  .entry p { margin: 0; font-size: 14.5px; color: var(--ink-soft); max-width: 74ch; }
+  .entry p strong { color: var(--ink); font-weight: 600; }
+
+  /* The tag encodes what the deck edit IS, which is the thing a person
+     updating slides actually sorts by. */
+  .tag {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    padding: 3px 7px;
+    border-radius: 4px;
+    white-space: nowrap;
+  }
+  .tag.new { background: var(--ok-soft); color: var(--ok); }
+  .tag.stronger { background: var(--accent-soft); color: var(--accent); }
+  .tag.fix { background: var(--crit-soft); color: var(--crit); }
+  .slide {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11px;
+    color: var(--ink-soft);
+    letter-spacing: .02em;
+  }
+
+  /* ---------- table ---------- */
+  .scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
+  table { width: 100%; border-collapse: collapse; font-size: 14.5px; min-width: 560px; }
+  th, td { text-align: left; padding: 10px 16px; border-bottom: 1px solid var(--line); }
+  tbody tr:last-child td { border-bottom: 0; }
+  th {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 10.5px;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    font-weight: 500;
+  }
+  td.num {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .win { color: var(--ok); font-weight: 600; }
+  .lose { color: var(--crit); }
+
+  /* ---------- callout ---------- */
+  .callout {
+    border-left: 3px solid var(--warn);
+    background: var(--warn-soft);
+    border-radius: 0 8px 8px 0;
+    padding: 14px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .callout h3 {
+    margin: 0;
+    font-family: "Bitter", Georgia, serif;
+    font-size: 15.5px;
+    font-weight: 600;
+    color: var(--warn);
+  }
+  .callout p { margin: 0; font-size: 14.5px; max-width: 76ch; }
+
+  code {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: .88em;
+    background: var(--accent-soft);
+    color: var(--accent);
+    padding: 1px 5px;
+    border-radius: 4px;
+  }
+
+  ul.plain { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 7px; }
+  ul.plain li { font-size: 14.5px; color: var(--ink-soft); max-width: 76ch; }
+  ul.plain li strong { color: var(--ink); font-weight: 600; }
+
+  footer {
+    border-top: 1px solid var(--line);
+    padding-top: 16px;
+    font-size: 13px;
+    color: var(--ink-soft);
+    max-width: 74ch;
+  }
+
+  @media (max-width: 620px) {
+    .entry { grid-template-columns: 1fr; }
+    .entry > .tags { flex-direction: row; align-items: center; }
+  }
+
+  /* Ctrl+P should produce a clean handout, since this doubles as the PDF. */
+  @media print {
+    body { background: #fff; font-size: 11.5pt; }
+    .wrap { padding: 0; gap: 26px; max-width: none; }
+    .entry, .figures, .scroll { box-shadow: none; break-inside: avoid; }
+    section { break-inside: avoid-page; }
+  }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <div>
+      <p class="eyebrow">Team NeuraForge · SIH26024</p>
+      <h1>What changed, and which slide it lands on</h1>
+      <p class="standfirst">
+        Every claim below is measured on the running system, not estimated. Tags
+        say whether a slide gains a claim, keeps a claim with a better number, or
+        has to be corrected because the old wording is no longer true.
+      </p>
+    </div>
+    <div class="stamp">
+      <b>5 September 2026</b><br>
+      Gevra OC · Korba<br>
+      APK <b>2.07 GB</b> · 4 models<br>
+      Chain <b>intact</b>, 4 records<br>18 monitoring points
+    </div>
+  </header>
+
+  <section>
+    <h2>Figures the deck can quote</h2>
+    <p class="lede">
+      All measured today on the Galaxy S24+ and the local stack. Where a number
+      replaces one already on a slide, the entry below says so.
+    </p>
+    <div class="figures">
+      <div class="fig good">
+        <span class="n">4 / 4</span>
+        <span class="k">Grounded answers</span>
+        <span class="s">correct owner, date and clause</span>
+      </div>
+      <div class="fig">
+        <span class="n">1,078</span>
+        <span class="k">Training examples</span>
+        <span class="s">from the project's own corpus</span>
+      </div>
+      <div class="fig good">
+        <span class="n">95.9%</span>
+        <span class="k">Token accuracy</span>
+        <span class="s">6 epochs, loss 0.352</span>
+      </div>
+      <div class="fig">
+        <span class="n">238 MB</span>
+        <span class="k">Tuned model</span>
+        <span class="s">Q4_0, runs on the phone's GPU</span>
+      </div>
+      <div class="fig bad">
+        <span class="n">410.6 ha</span>
+        <span class="k">Outside the lease</span>
+        <span class="s">PostGIS ST_Difference</span>
+      </div>
+      <div class="fig">
+        <span class="n">18</span>
+        <span class="k">Monitoring points</span>
+        <span class="s">named by regulation, not invented</span>
+      </div>
+      <div class="fig">
+        <span class="n">87,302</span>
+        <span class="k">Sensor readings</span>
+        <span class="s">5 live streams, 51 alerts</span>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>The comparison slide writes itself</h2>
+    <p class="lede">
+      Same question, three answerers, measured within an hour of each other. This
+      is the strongest new argument for running the model on the handset — and it
+      is a measurement, not a claim.
+    </p>
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Answerer</th>
+            <th>Where it runs</th>
+            <th>Time to answer</th>
+            <th>Outcome</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>ANUPALAN 270M</strong></td>
+            <td>On the phone, airplane mode</td>
+            <td class="num">~20 s</td>
+            <td class="win">4 duties, owners and dates correct, clauses cited</td>
+          </tr>
+          <tr>
+            <td>Gemini 2.5-flash-lite</td>
+            <td>Cloud, paid tier</td>
+            <td class="num">0.84 s</td>
+            <td>Full answer, but the ledger never leaves the device</td>
+          </tr>
+          <tr>
+            <td>NVIDIA <code>kimi-k3</code></td>
+            <td>Cloud, free tier</td>
+            <td class="num lose">115–144 s</td>
+            <td class="lose">Two minutes to return the word “OK”</td>
+          </tr>
+          <tr>
+            <td>NVIDIA <code>deepseek-v4-flash</code></td>
+            <td>Cloud, free tier</td>
+            <td class="num lose">160 s, then timeout</td>
+            <td class="lose">Queue depth, not model size — thinking off changed nothing</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="lede">
+      The line for the slide: <strong>a queued free tier was six times slower
+      than the phone in the officer's hand</strong>, and the phone needed no
+      network at all.
+    </p>
+  </section>
+
+  <section>
+    <h2>Slides that need editing</h2>
+
+    <div class="entries">
+
+      <div class="entry">
+        <div class="tags">
+          <span class="tag new">New claim</span>
+          <span class="slide">Live demo · headline</span>
+        </div>
+        <div class="body">
+          <h3>The alert loop now closes, and names who was told</h3>
+          <p>
+            Reading &rarr; threshold arithmetic &rarr; alert &rarr; a manager
+            issues an instruction &rarr; it appears on every handset at that mine
+            &rarr; an officer acknowledges &rarr; the dashboard records the name
+            and the time. Demonstrated end to end: a methane breach sent from the
+            phone produced <em>WITHDRAW ALL PERSONS</em> on the handset within
+            twelve seconds, acknowledged, and logged.
+            <strong>An alert nobody acted on and an alert somebody stood down
+            look identical on a sensor chart — only this record tells them
+            apart</strong>, which is the distinction an inquiry turns on.
+          </p>
+        </div>
+      </div>
+
+      <div class="entry">
+        <div class="tags">
+          <span class="tag new">New claim</span>
+          <span class="slide">Sensors</span>
+        </div>
+        <div class="body">
+          <h3>Readings now carry the place regulation names</h3>
+          <p>
+            CMR 2017 sets the methane limit in the general body of return air
+            <em>of a district</em>; CPCB conditions specify dust at the lease
+            boundary; a blast vibration limit is measured at the nearest house,
+            not at the blast. Eighteen statutory monitoring points are catalogued
+            and every reading and alert carries one, so the alert text reads
+            <strong>“methane 1.94% exceeds the 1.25% trigger at Return airway —
+            District 1”</strong>. Breaches are now tracked per place, so a
+            district-level event can no longer be hidden by one at the main return.
+          </p>
+        </div>
+      </div>
+
+      <div class="entry">
+        <div class="tags">
+          <span class="tag new">New claim</span>
+          <span class="slide">Roadmap / Hardware</span>
+        </div>
+        <div class="body">
+          <h3>No transmitters yet — and the demo says so</h3>
+          <p>
+            The handset carries a sensor console that posts readings by hand at
+            normal, elevated or breach level for any of eight streams. It is
+            labelled as manual entry on the screen itself, and it posts to
+            <strong>exactly the endpoint a plant gateway would use</strong> —
+            nothing is special-cased server-side, so the threshold arithmetic,
+            the clause and the alert are the production path. Wiring a real
+            transmitter replaces that one screen and nothing else. Say this
+            plainly to judges; it is a stronger claim than a canned demo, and it
+            is only true because the server cannot tell the difference.
+          </p>
+        </div>
+      </div>
+
+      <div class="entry">
+        <div class="tags">
+          <span class="tag fix">Correction</span>
+          <span class="slide">Architecture</span>
+        </div>
+        <div class="body">
+          <h3>The runtime is llama.cpp, not LiteRT-LM</h3>
+          <p>
+            Any slide naming <strong>Gemma 4 E4B via LiteRT-LM</strong> is out of
+            date. The app now runs <code>llama.rn</code> (llama.cpp) with GGUF
+            weights. This was not cosmetic: LiteRT's OpenCL path produced garbage
+            on this handset's Mali GPU, and llama.cpp's does not. Three models
+            ship on-device — Qwen3 1.7B for the ledger, ANUPALAN 270M for speed,
+            LFM2.5-VL 450M for photographs.
+          </p>
+        </div>
+      </div>
+
+      <div class="entry">
+        <div class="tags">
+          <span class="tag fix">Correction</span>
+          <span class="slide">Evidence integrity</span>
+        </div>
+        <div class="body">
+          <h3>The hash-chain claim is only now actually true</h3>
+          <p>
+            The chain covered <code>photo_sha256</code>, coordinates, timestamp
+            and obligation — <strong>but not the officer's written
+            observation</strong>. Editing a finding in the database passed
+            verification cleanly. Measured, not theorised. The canonical string
+            now includes the observation and pins the timestamp to UTC, and a
+            tampered row is caught and named. If a judge asks "can I change what
+            the officer wrote?", the answer is now no.
+          </p>
+        </div>
+      </div>
+
+      <div class="entry">
+        <div class="tags">
+          <span class="tag new">New claim</span>
+          <span class="slide">AI / Model</span>
+        </div>
+        <div class="body">
+          <h3>We trained our own model on our own corpus</h3>
+          <p>
+            Gemma 3 270M fine-tuned into <strong>ANUPALAN 270M</strong> on 1,078
+            examples built from this project's clause corpus, ledger rows and
+            sensor windows. It answers grounded ledger questions 4/4 with correct
+            owners, dates and citations. Bare recall stays weak, so facts are
+            retrieved and placed in the prompt — the project's own rule applied
+            one level up: <strong>the model does language, deterministic code
+            supplies the facts.</strong>
+          </p>
+        </div>
+      </div>
+
+      <div class="entry">
+        <div class="tags">
+          <span class="tag new">New claim</span>
+          <span class="slide">Evidence / Demo flow</span>
+        </div>
+        <div class="body">
+          <h3>Evidence is now geographically provable</h3>
+          <p>
+            A capture carries its GPS fix; PostGIS <code>ST_Contains</code>
+            returns the verdict; the dashboard plots it. Three captures sit inside
+            the Gevra lease in green, one outside in red. <strong>The colour comes
+            from the geometry, not from what the officer typed.</strong>
+          </p>
+        </div>
+      </div>
+
+      <div class="entry">
+        <div class="tags">
+          <span class="tag new">New claim</span>
+          <span class="slide">Dashboard</span>
+        </div>
+        <div class="body">
+          <h3>The register is now managed from the dashboard</h3>
+          <p>
+            Duties can be created, edited, <strong>reassigned</strong> and deleted
+            from the browser, and the handset picks the change up on its next
+            fetch — verified end to end by reassigning a duty and watching it
+            change on the phone. Plus a new Sensors page carrying all five live
+            streams with their thresholds, z-scores and governing clauses.
+          </p>
+        </div>
+      </div>
+
+      <div class="entry">
+        <div class="tags">
+          <span class="tag new">New claim</span>
+          <span class="slide">Safety / Governance</span>
+        </div>
+        <div class="body">
+          <h3>The system refuses things, and says why</h3>
+          <p>
+            Deleting a duty that still has evidence returns <strong>409</strong>:
+            <em>“Evidence outlives the duty it was captured for.”</em> A regulator
+            editing the register returns <strong>403</strong> — they inspect, they
+            do not edit. Both are demonstrable in ten seconds, and refusals are
+            more convincing to a compliance audience than features.
+          </p>
+        </div>
+      </div>
+
+      <div class="entry">
+        <div class="tags">
+          <span class="tag stronger">Better number</span>
+          <span class="slide">Cost / Offline</span>
+        </div>
+        <div class="body">
+          <h3>Offline is now the fast path, not the compromise</h3>
+          <p>
+            The deck previously argued on-device on grounds of cost and
+            connectivity. Add performance: the phone answered a real ledger
+            question in about 20 seconds while a free cloud tier took two minutes
+            to say “OK”. An optional multi-provider cloud fallback exists, is off
+            by default, and <strong>cannot receive ledger rows by
+            construction</strong> — its function signature has nowhere to put them.
+          </p>
+        </div>
+      </div>
+
+      <div class="entry">
+        <div class="tags">
+          <span class="tag fix">Correction</span>
+          <span class="slide">Fine-tuning</span>
+        </div>
+        <div class="body">
+          <h3>“Granite 4.0 350M” was a leftover label</h3>
+          <p>
+            The fine-tune page defaulted to a base model this project has never
+            trained — a stale string in a free-text box. It now offers only bases
+            actually used. If a screenshot of that page is in the deck,
+            <strong>retake it.</strong>
+          </p>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <section>
+    <h2>Two things to be careful about</h2>
+
+    <div class="callout">
+      <h3>Do not put the State Emblem or Ministry of Coal mark in the deck</h3>
+      <p>
+        Its use is restricted by the <strong>State Emblem of India (Prohibition
+        of Improper Use) Act, 2005</strong>. A student prototype carrying it
+        asserts government authority the project does not have — at a
+        government-run competition, in front of judges who will recognise it
+        immediately. The risk is not a takedown; it is a compliance tool caught
+        misrepresenting its own standing, which undercuts the whole pitch.
+      </p>
+    </div>
+
+    <div class="callout">
+      <h3>Three images in the build have unconfirmed provenance</h3>
+      <p>
+        The login and Overview photographs are Pexels and Pixabay, free for
+        commercial use. The Duties, Capture and Sync photographs carry no
+        watermark but no known licence either. Fine for a demo; swap them for
+        Pexels equivalents before anything public. Images that still carry a
+        Chegg logo, a Shutterstock ID or a Freepik watermark were left out.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Still open</h2>
+    <ul class="plain">
+      <li><strong>Deck screenshots are stale.</strong> The dashboard gained a navy header, a hero, a mining-cycle panel, a Sensors page and an all-India coalfield map with 16 fields. Every screenshot in the deck predates all of it.</li>
+      <li><strong>The demo script should lead with the refusals.</strong> The 409 and the tamper detection are the moments that separate this from a CRUD app with a chatbot bolted on.</li>
+      <li><strong>Gradle cannot run from an agent shell on this machine</strong> — <code>Selector.open()</code> fails, so the launcher never reaches its daemon. JS-only changes now ship by swapping the Hermes bundle into the signed APK, which takes about three minutes instead of a full build. Native changes still need Android Studio.</li>
+      <li><strong>Directives are polled every 12 seconds, not pushed.</strong> Push needs FCM, a Google project and a network the demo does not have. Worth saying out loud before a judge asks, because the honest answer is good: it works in the same places the rest of the app works.</li>
+      <li><strong>CLAUDE.md still describes the LiteRT-LM design.</strong> Worth updating before anyone reads it as the spec.</li>
+    </ul>
+  </section>
+
+  <footer>
+    Generated from the working system on 5 September 2026 — figures come from the
+    live database, the running API and the handset, not from estimates. Print to
+    PDF with Ctrl&nbsp;+&nbsp;P; the layout is set up for it.
+  </footer>
+
+</div>

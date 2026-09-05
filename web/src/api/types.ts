@@ -49,9 +49,32 @@ export interface Alert {
   severity: Severity;
   message: string;
   clause_ref: string | null;
+  location: string | null;
   source: string;
   created_at: string;
   acknowledged_by: number | null;
+}
+
+/**
+ * An instruction issued from here to the handsets.
+ *
+ * Separate from Alert on purpose: the alert is arithmetic, the directive is a
+ * person deciding what to do about it. Only this record can say whether anyone
+ * underground was actually told.
+ */
+export interface Directive {
+  id: number;
+  mine_id: number;
+  alert_id: number | null;
+  severity: string;
+  location: string | null;
+  location_label: string | null;
+  message: string;
+  action: string | null;
+  created_at: string;
+  issued_by_name: string | null;
+  acknowledged_at: string | null;
+  acknowledged_by_name: string | null;
 }
 
 export interface Reading {

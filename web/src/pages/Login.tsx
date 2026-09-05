@@ -2,7 +2,7 @@ import axios from "axios";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import mineBg from "../assets/mine-bg.png";
+import fieldBg from "../assets/photos/field-wide.jpg";
 import { API_BASE } from "../api/client";
 import { useAuth } from "../lib/auth";
 
@@ -54,14 +54,20 @@ export default function Login() {
   }
 
   return (
-    // Generated artwork, not a stock photograph - see tools/make_art.py. A
-    // government-facing tool should be able to account for the provenance of
-    // every asset it ships.
+    // An Indian open-cast coalfield, from Pexels (pexels-photo-17971746) under
+    // the Pexels licence: free for commercial use, no attribution required,
+    // no watermark. A government-facing tool should be able to account for the
+    // provenance of every asset it ships, so it is recorded here rather than
+    // in someone's memory. Cropped to 1800x620 at build time by hand so the
+    // browser is not shipped 2520x1416 of pixels it will never draw.
     <div
-      className="grid min-h-full place-items-center bg-cover bg-center px-4"
-      style={{ backgroundImage: `url(${mineBg})` }}
+      className="relative grid min-h-full place-items-center bg-cover bg-center px-4"
+      style={{ backgroundImage: `url(${fieldBg})` }}
     >
-      <div className="w-full max-w-sm">
+      {/* A scrim. White type over a photograph is unreadable wherever the
+          photograph happens to be pale, and this one has a bright sky. */}
+      <div className="absolute inset-0 bg-gradient-to-b from-[#0f2942]/85 via-[#0f2942]/70 to-[#0f2942]/90" />
+      <div className="relative w-full max-w-sm">
         <div className="mb-6 text-center">
           <h1 className="text-2xl font-semibold tracking-tight text-white">
             ANUPALAN

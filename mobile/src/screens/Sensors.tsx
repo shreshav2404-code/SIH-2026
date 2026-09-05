@@ -26,6 +26,9 @@ import {
   type Availability,
 } from "../lib/sensors";
 import { C, mono } from "../theme";
+import ScreenHero from "../components/ScreenHero";
+import SensorConsole from "../components/SensorConsole";
+import { RAILS_PHOTO } from "../lib/photos";
 
 /**
  * Live telemetry from the handset itself.
@@ -179,8 +182,15 @@ export default function Sensors({ mineId }: { mineId: number }) {
   }, []);
 
   return (
-    <ScrollView style={s.wrap} contentContainerStyle={{ padding: 16 }}>
-      <Text style={s.title}>Handset telemetry</Text>
+    <ScrollView style={s.wrap} contentContainerStyle={{ padding: 0 }}>
+      <ScreenHero
+        photo={RAILS_PHOTO}
+        title="Handset telemetry"
+        subtitle="this phone is the sensor · posted every two seconds"
+      />
+      <SensorConsole mineId={mineId} />
+
+      <View style={{ padding: 16 }}>
       <Text style={s.body}>
         Readings measured by this phone, posted to the ledger every two seconds
         on the same path as the fixed sensors. Breach detection is arithmetic —
@@ -249,6 +259,7 @@ export default function Sensors({ mineId }: { mineId: number }) {
         turn them into compliance signals; until then they are measurements.
       </Text>
       <Text style={s.hidden}>{tick}</Text>
+      </View>
     </ScrollView>
   );
 }

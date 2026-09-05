@@ -1,7 +1,8 @@
 """ANUPALAN API.
 
 No LLM runs here. All language work — clause extraction, voice to observation,
-report drafting, ledger Q&A — happens on-device in the app via Gemma 4 E4B.
+report drafting, ledger Q&A — happens on-device in the app. The backend
+never loads a model.
 This service is the ledger, the hash chain, the geometry and the risk score.
 """
 
@@ -97,6 +98,7 @@ def health() -> JSONResponse:
 
 from routers import alerts as alerts_router  # noqa: E402
 from routers import auth as auth_router  # noqa: E402
+from routers import directives as directives_router  # noqa: E402
 from routers import evidence as evidence_router  # noqa: E402
 from routers import finetune as finetune_router  # noqa: E402
 from routers import geo as geo_router  # noqa: E402
@@ -114,6 +116,7 @@ for r in (
     evidence_router,
     sensors_router,
     alerts_router,
+    directives_router,
     risk_router,
     geo_router,
     returns_router,

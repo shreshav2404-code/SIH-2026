@@ -17,7 +17,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { File, Paths } from "expo-file-system";
 
-export type ModelId = "qwen25" | "falconR" | "granite350" | "lfmvl450";
+export type ModelId = "qwen3" | "tuned" | "lfmvl";
 
 /**
  * How a model's chat template handles reasoning.
@@ -86,23 +86,58 @@ export interface ModelSpec {
   audio: boolean;
   /** See ThinkingControl. Verified by reading each bundle's chat template. */
   thinking: ThinkingControl;
+  /**
+   * Plain chat only - never given the ledger.
+   *
+   * The compliance prompt is a grouped duty table plus rules about copying
+   * clause references exactly. That is a lot to ask of 230M parameters, and a
+   * model that cannot follow it does not fail quietly: it invents regulation
+   * numbers, which is the one failure this project cannot ship. So the
+   * smallest model is not asked. It answers general questions, says so on
+   * every reply, and the ledger work goes to a model that can carry it.
+   */
+  chatOnly: boolean;
+  /**
+   * Repetition penalty, or undefined for none.
+   *
+   * PER-MODEL, because a single global value was measured to help one model
+   * and wreck another. LFM2.5-VL answered a photograph by repeating one
+   * sentence fifteen times and needs 1.15. The fine-tuned 270M is the exact
+   * opposite case: it answers by QUOTING the facts placed in its prompt, so a
+   * repetition penalty is a penalty on quoting. Measured on four grounded
+   * probes - 1.0 answered all four correctly, 1.05 already miscounted ("4
+   * duties are overdue" from a two-row prompt), 1.15 produced multilingual
+   * noise. Qwen3 is left alone because it was tested working without one.
+   */
+  repeatPenalty?: number;
+  /**
+   * The multimodal projector that gives this model sight, if it has one.
+   *
+   * A vision GGUF is always TWO files: the language model, and this - the
+   * image encoder plus the projection that maps what it sees into the model's
+   * embedding space. llama.cpp keeps them apart so text-only users need not
+   * carry the encoder. The main file alone is blind.
+   */
+  mmproj?: string;
   /** One line under the label in the picker. */
   blurb: string;
 }
 
 /**
- * Three small models, and no large one. That is a deliberate retreat.
+ * Three small models, and nothing above 460 MB. That is a deliberate retreat,
+ * arrived at by measurement rather than preference.
  *
- * Gemma 4 E4B works on this phone - GPU/4096, 45 s to load, 3.3 GB resident,
- * correct answers with real clause references. It is also 144 seconds to
- * answer a ledger question, and a demo where the officer waits two and a half
- * minutes is not a demo. E2B was no better: 115 s to load, 74 s to answer.
+ * Gemma 4 E4B works on this phone and takes 144 seconds to answer a ledger
+ * question. Qwen2.5 1.5B answers in ninety. Both were dropped, and so was the
+ * assumption behind them - that a bigger model was the way to a better answer.
+ * What actually cost the phone its memory was the CONTEXT WINDOW, not the
+ * weights: at 4096 tokens every model measured settled near 4 GB resident
+ * regardless of size, a 459 MB one no better than a 1.49 GB one. See
+ * LOAD_LADDER in llm.ts.
  *
- * The Gemma family is the ONLY multimodal option in LiteRT-LM, so dropping it
- * costs speech and photograph input outright - the spoken-Hindi moment goes
- * with it. That is the price of the trade and it is worth stating plainly
- * rather than discovering during a rehearsal. E4B is kept in models-archive/,
- * ready to return on hardware that can carry it.
+ * Dropping the Gemma family cost speech input outright, and dropping
+ * LFM2.5-VL costs photographs - no model here reads an image, so the camera
+ * and microphone buttons hide themselves rather than fail when tapped.
  *
  * Every model here has had its chat template extracted from the .litertlm
  * bundle and READ. That is what caught Qwen3-1.7B, which loaded perfectly on
@@ -112,69 +147,70 @@ export interface ModelSpec {
  *     {%- if not enable_thinking|default(true) %}{{- '<think>...</think>' }}
  *
  * so reasoning was on unless something turned it off, and nothing in this
- * runtime can. Marker-counting is not enough either - LFM2.5 mentions
- * </think> inside a clause that STRIPS reasoning from past messages, which a
- * naive check reports as a reasoning model.
+ * runtime can. All three below were checked the same way: LFM2.5 defaults
+ * preserve_thinking to false, SmolLM2 is plain ChatML, and Granite opens no
+ * reasoning block at all.
  *
  * Only ever ONE is resident, and switching between them mid-session does not
  * work - see switchModel() in llm.ts.
  */
 export const MODELS: ModelSpec[] = [
   {
-    id: "qwen25",
-    filename: "Qwen2.5-1.5B-Instruct_multi-prefill-seq_q8_ekv4096.litertlm",
-    label: "Qwen2.5 1.5B",
-    approxBytes: 1_597_931_520,
+    id: "qwen3",
+    filename: "Qwen_Qwen3-1.7B-Q4_0.gguf",
+    label: "Qwen3 1.7B",
+    approxBytes: 1_231_813_024,
     vision: false,
     audio: false,
-    thinking: "none",
-    blurb: "Most capable here · int8 · text only",
+    // The only model measured on this handset to answer a ledger question with
+    // every owner and due date correct. Its template suppresses reasoning ONLY
+    // when enable_thinking is explicitly false; undefined is not the same
+    // thing, which is the trap that made it look broken under LiteRT-LM.
+    thinking: "config",
+    chatOnly: false,
+    blurb: "Answers the ledger - q4_0 - reasoning can be switched off",
   },
   {
-    id: "falconR",
-    filename: "Falcon-H1-Tiny-R-0.6B_int8.litertlm",
-    label: "Falcon-H1 0.6B R",
-    approxBytes: 873_254_788,
-    vision: false,
-    audio: false,
-    // The R is Reasoning: TRAINED to reason, so it may show its working even
-    // though nothing forces it to. Its template ends cleanly at
-    // <|im_start|>assistant with no <think> injection, so it is not the Qwen3
-    // trap - that one defaulted enable_thinking to true and could not be
-    // switched off from here. Still worth watching against a 150-token budget.
-    thinking: "none",
-    blurb: "Reasoning-tuned · int8 · may show its working",
-  },
-  {
-    id: "lfmvl450",
-    filename: "LFM2.5-VL-450M_int8.litertlm",
+    id: "lfmvl",
+    filename: "LFM2.5-VL-450M-Q4_0.gguf",
+    mmproj: "mmproj-LFM2.5-VL-450m-Q8_0.gguf",
     label: "LFM2.5-VL 450M",
-    approxBytes: 563_549_568,
+    approxBytes: 219_311_264,
     vision: true,
     audio: false,
     thinking: "none",
-    blurb: "Reads photographs · int8 · nine languages",
+    chatOnly: true,
+    // The one model measured to need this. See ModelSpec.repeatPenalty.
+    repeatPenalty: 1.15,
+    blurb: "Reads photographs - 209 MB + 98 MB encoder",
   },
   {
-    id: "granite350",
-    filename: "granite-4.0-h-350m_int8_gpu.litertlm",
-    label: "Granite 4.0 350M",
-    approxBytes: 481_218_880,
+    id: "tuned",
+    filename: "gemma-anupalan-Q4_0.gguf",
+    label: "ANUPALAN 270M",
+    approxBytes: 249_614_080,
     vision: false,
     audio: false,
     thinking: "none",
-    blurb: "Fastest · int8 · light chat",
+    // NOT chatOnly. This is the point of tuning it: a stock 270M could not be
+    // trusted with a duty table, and this one is trained on 1,078 examples of
+    // exactly that job - ledger rows, sensor windows, clause text and the
+    // app's own facts, all in the prompt shapes llm.ts actually sends.
+    chatOnly: false,
+    blurb: "Trained on this project - 238 MB - fastest",
   },
 ];
 
 
 
 /**
- * The most capable of the three. Speed was the reason for dropping Gemma, but
- * the smallest model here is explicitly not for clause work, so the default
- * should still be the one that can do the job.
+ * The most capable of the three, and still only 833 MB.
+ *
+ * Qwen2.5 1.5B held this slot and was removed. It was the best of the four on
+ * paper and the worst on this handset: measured from a cold start it settled
+ * at 4,079 MB resident and took ninety seconds to answer a ledger question.
  */
-export const DEFAULT_MODEL_ID: ModelId = "qwen25";
+export const DEFAULT_MODEL_ID: ModelId = "qwen3";
 
 const PREF_KEY = "anupalan.model";
 
@@ -301,6 +337,44 @@ export function locateAll(): ModelLocation[] {
  * indicator, never in front of a judge. Later calls find it extracted and
  * return immediately.
  */
+/**
+ * Make the multimodal projector available and return its path, or null.
+ *
+ * Separate from ensureModel() because it is a second file with its own size,
+ * and because a text-only model must not pay for a check it can never need.
+ * Vision is off unless BOTH files are present - a model that thinks it can see
+ * and cannot would describe an image nobody looked at.
+ */
+export async function ensureProjector(spec: ModelSpec): Promise<string | null> {
+  if (!spec.mmproj) return null;
+
+  const target = new File(Paths.document, spec.mmproj);
+  const asset = new File(Paths.bundle, spec.mmproj);
+
+  const assetBytes = (() => {
+    try {
+      return asset.exists ? (asset.size ?? 0) : 0;
+    } catch {
+      return 0;
+    }
+  })();
+
+  if (target.exists && (target.size ?? 0) > 0) {
+    // Already extracted and the right size - reuse it.
+    if (!assetBytes || (target.size ?? 0) === assetBytes) return target.uri;
+    // A partial copy from an interrupted extraction. Start again.
+    try {
+      target.delete();
+    } catch {
+      /* best effort */
+    }
+  }
+
+  if (!asset.exists) return null;
+  await asset.copy(target);
+  return target.uri;
+}
+
 export async function ensureModel(
   spec: ModelSpec,
   onProgress?: (fraction: number) => void,

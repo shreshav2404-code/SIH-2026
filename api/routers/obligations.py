@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from auth import current_user, resolve_mine_id
+from auth import current_user, require_roles, resolve_mine_id
 from db import get_db
 from models import Evidence, Obligation, RiskScore, Statute, User
 from schemas import (
@@ -205,7 +205,10 @@ def patch_obligation(
     obligation_id: int,
     body: ObligationPatch,
     db: Session = Depends(get_db),
-    user: User = Depends(current_user),
+    # A regulator inspects the register; they do not edit it. resolve_mine_id
+    # alone would let one through, because it hands regulators any mine they
+    # ask for - so the role gate is the thing actually doing the work here.
+    user: User = Depends(require_roles("mine_manager", "safety_officer")),
 ) -> ObligationOut:
     ob = db.get(Obligation, obligation_id)
     if not ob:
@@ -230,3 +233,44 @@ def patch_obligation(
         due_date=ob.due_date,
         status=ob.status,
     )
+
+
+@router.delete("/{obligation_id}", status_code=204)
+def delete_obligation(
+    obligation_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_roles("mine_manager")),
+) -> None:
+    """Remove a duty from this mine's register.
+
+    Manager only, and narrower than editing on purpose: deleting a statutory
+    duty makes it stop being tracked, and that is a decision the person
+    accountable for the register should make rather than anyone with a login.
+
+    Refuses while evidence still points at it. A capture whose obligation has
+    vanished is an orphan in the hash chain - the row still hashes, but nobody
+    can say what it was evidence OF, which is the one property the chain
+    exists to guarantee.
+    """
+    ob = db.get(Obligation, obligation_id)
+    if not ob:
+        raise HTTPException(status_code=404, detail="obligation not found")
+    resolve_mine_id(user, ob.mine_id)
+
+    held = db.scalar(
+        select(func.count()).select_from(Evidence).where(
+            Evidence.obligation_id == obligation_id
+        )
+    )
+    if held:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"{held} evidence record(s) reference this duty. "
+                "Evidence outlives the duty it was captured for; mark the duty "
+                "waived instead of deleting it."
+            ),
+        )
+
+    db.delete(ob)
+    db.commit()

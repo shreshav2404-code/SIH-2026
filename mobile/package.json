@@ -16,6 +16,7 @@
     "expo-sensors": "~57.0.2",
     "expo-sqlite": "~57.0.2",
     "expo-status-bar": "~57.0.1",
+    "llama.rn": "0.12.9",
     "react": "19.2.3",
     "react-native": "0.86.3",
     "react-native-litert-lm": "0.7.0",

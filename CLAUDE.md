@@ -9,7 +9,7 @@ AI-based compliance monitoring system for Coal India.
 
 ## Two hard constraints (read first)
 
-1. **The LLM runs ON-DEVICE ONLY — inside the app.** No Ollama, no server LLM, no cloud, no API. Gemma 4 E4B ships inside the app and runs via LiteRT-LM on the phone and the Android Studio emulator. The backend does NO LLM work.
+1. **The LLM runs ON-DEVICE ONLY — inside the app.** No Ollama, no server LLM, no cloud, no API. Three small models ship inside the app and run via LiteRT-LM on the phone and the Android Studio emulator. The backend does NO LLM work.
 2. **Total cost = ₹0.** Everything is free and open source, nothing runs in the cloud. No API keys, no server rental, no subscriptions. The whole thing runs on the phone, the emulator, and the developer's own laptop.
 
 ---
@@ -29,7 +29,7 @@ When a judge asks why not Kubernetes: "That is the deployment target. In 36 hour
 ```
   PHONE (S24+) / EMULATOR (arm64)      BROWSER (dashboard :5173)
   React Native app                     React dashboard
-  Gemma 4 E4B on-device (LiteRT-LM)    ledger · map · alerts · risk
+  3 small models on-device (LiteRT-LM) ledger · map · alerts · risk
   MiniLM retrieval · SQLite queue
   camera · GPS · voice
         |                                        |
@@ -48,7 +48,7 @@ When a judge asks why not Kubernetes: "That is the deployment target. In 36 hour
                     sensor_sim.py pushes readings every 2s
 ```
 
-**Where intelligence runs:** all LLM/language/vision/voice work happens in the app on-device (E4B + MiniLM). The backend is a free local data layer — ledger, hash chain, geo, risk score, storage, dashboard data. It never calls an LLM. Clause extraction runs in the app; the result is POSTed to the backend to store.
+**Where intelligence runs:** all LLM/language work happens in the app on-device (a 350M-class model + MiniLM). The backend is a free local data layer — ledger, hash chain, geo, risk score, storage, dashboard data. It never calls an LLM. Clause extraction runs in the app; the result is POSTed to the backend to store.
 
 ---
 
@@ -61,7 +61,7 @@ When a judge asks why not Kubernetes: "That is the deployment target. In 36 hour
 | Backend | Python 3.11, FastAPI, Uvicorn, SQLAlchemy 2, Pydantic v2, Alembic | Runs locally on the laptop under Docker. No LLM. |
 | Database | PostgreSQL 16 + **PostGIS** + **pgvector**, one container | Relational + spatial + vector in one SQL store. |
 | Embeddings | sentence-transformers `all-MiniLM-L6-v2` (90 MB) | RAG retrieval, on-device. |
-| **On-device LLM** | **Gemma 4 E4B** via **LiteRT-LM** (`react-native-litert-lm`) | The one model. Language + vision + voice. No server. |
+| **On-device LLM** | **Granite 4.0 350M · SmolLM2 360M · LFM2.5 230M** via **LiteRT-LM** (`react-native-litert-lm`) | Text only. One resident at a time. No server. |
 | Risk | XGBoost (scikit-learn), synthetic history | Deterministic, auditable. Runs on backend. |
 | Vision | YOLOv8n, pretrained | Kept for the hackathon (AGPL is fine for a demo). |
 | Infra | Docker + docker-compose, Git, scrcpy, DBeaver, OBS | All free. |
@@ -70,26 +70,63 @@ When a judge asks why not Kubernetes: "That is the deployment target. In 36 hour
 
 ---
 
-## The four AI models (what does what)
+## The AI models (what does what)
 
 | Model | Job | Runs |
 |---|---|---|
-| **Gemma 4 E4B** | ALL language work — clause→duty extraction, voice/text→observation, sensor-window interpretation, ledger Q&A, report drafting, risk narration. Multimodal, so also image description + native audio (no Whisper needed). | On-device (app) |
+| **Granite 4.0 350M** (459 MB) | Default. ALL grounded language work — clause→duty extraction, text→observation, sensor-window interpretation, ledger Q&A, report drafting. | On-device (app) |
+| **SmolLM2 360M** (356 MB) | Same jobs, better conversational tone | On-device (app) |
+| **LFM2.5 230M int4** (169 MB) | `chatOnly` — plain chat and general info. **Never given the ledger.** | On-device (app) |
 | **MiniLM L6-v2** | RAG retrieval over the clause corpus | On-device (app) |
 | **XGBoost** | Risk SCORING — deterministic, auditable | Backend (laptop) |
 | **YOLOv8n** | Object detection on evidence photos | Backend (laptop) |
+
+**No speech, no image input.** Only the Gemma 4 family manages either in
+LiteRT-LM, and it is not bundled — so the microphone and camera buttons hide
+themselves rather than fail when tapped. The spoken-Hindi demo moment goes with
+it; that is the price of a phone that does not lag.
 
 **The line that matters (put it on a slide):** the model does language work; deterministic code does safety-critical work. Threshold breaches, PostGIS `ST_Contains` boundary checks, hash-chain verification, and statutory filing NEVER touch the model. "A statutory alert cannot depend on a probabilistic system, so we drew the line deliberately." Colour-code the architecture diagram: amber = model, blue = deterministic.
 
 ---
 
-## Why Gemma 4 E4B (locked)
+## Why three small models (measured, not chosen)
 
-8B total / 4.5B effective params. MMLU Pro 69.4% — beats Gemma 3 27B (67.6%). Text+image+audio, 128K context, 140+ languages (Hindi covered), native function calling, free for commercial use.
+Gemma 4 E4B was the locked pick and it **works** on the M31s — GPU/4096, 45 s
+to load, 3.3 GB resident, correct answers with real clause references. It also
+takes **144 seconds** to answer a ledger question. E2B: 115 s to load, 74 s to
+answer. Qwen2.5 1.5B: 90 s. A demo where the officer waits two minutes is not a
+demo, so the whole "one big multimodal model" premise was dropped.
 
-- **Multimodal = one model does everything:** language, image analysis, and native audio (spoken Hindi goes straight in — no separate speech-to-text model, one fewer dependency).
-- **Not 12B:** better on paper (77.2%) but not a phone model — Google ships E4B with Android/iOS benchmarks + Play Store links; 12B is desktop/web only at 7.7–8.0 GB, ~3× slower per token. Don't spend time on it.
-- **Sub-8GB fallback:** Gemma 4 E2B (2.59 GB, same family, same API). Read `ActivityManager.MemoryInfo` at first launch, fetch E2B instead. Safety net only.
+**The thing that actually cost the phone its memory was the context window, not
+the weights.** At `maxContextTokens: 4096`, measured cold on the M31s:
+
+| model | on disk | resident |
+|---|---|---|
+| Qwen2.5 1.5B | 1.49 GB | 4,079 MB |
+| Falcon-H1 0.6B R | 833 MB | 4,459 MB |
+| Granite 4.0 350M | 459 MB | 3,984 MB |
+
+A 459 MB model and a 1.49 GB model land in the same place. `GL mtrack` was 9 MB
+throughout — the Mali GPU was barely used whatever the UI claimed. The KV cache
+is allocated up front and dwarfs the weights. This starved a 7.7 GB phone to
+1.4 GB and made Android kill background processes by the dozen. **The ladder now
+starts at gpu/1024.** Nothing here needs more — a ledger prompt is ten duties
+against a 150-token answer cap.
+
+**Read every chat template before adding a model.** Qwen3-1.7B loaded perfectly
+and then answered a ledger question by saying the question was unclear. Its
+template ended `{%- if not enable_thinking|default(true) %}` — reasoning on
+unless something turns it off, and nothing in LiteRT-LM can. Marker-counting is
+not enough either: LFM2.5 mentions `</think>` inside a clause that STRIPS
+reasoning from past messages.
+
+**Ground the model, always** — unchanged and more important at this size. The
+clause is retrieved and passed IN; the model never recalls statute from memory.
+A model that gets a clause reference wrong does not fail loudly, it invents a
+plausible regulation number — Qwen wrote "Mines Rules 1555" once, one digit off
+a real statute. That is why the 230M model is `chatOnly` and its every answer is
+captioned *NOT grounded in the ledger*.
 
 ---
 
@@ -101,11 +138,15 @@ npm install react-native-litert-lm react-native-nitro-modules
 npx expo prebuild            # generates android/ and ios/
 npx expo run:android         # builds onto USB-connected S24+ (or the running emulator)
 
-# push the model once over the cable — NEVER over venue wifi:
-adb push gemma-4-E4B-it.litertlm /sdcard/Download/
+# The models are BUNDLED in the APK (-PbundleModel=true) and extracted to app
+# storage on first use. No adb push is needed, and /sdcard is unreachable from
+# expo-file-system anyway (no external-files dir in its API; Android 11+ blocks
+# shared storage without MANAGE_EXTERNAL_STORAGE).
 ```
 
-Load: `loadModel(path, { backend: "gpu" })`, stream via `sendMessageAsync`. Request GPU, fall back to CPU automatically. **Single code path — no LLM_MODE, no server branch.**
+Load via LOAD_LADDER: `gpu/1024 → cpu/1024 → gpu/512 → cpu/512`, keeping the first rung that loads. **Do not raise the context window** — see "Why three small models". **Single code path — no LLM_MODE, no server branch.**
+
+**Switching models mid-session does not work.** LiteRT-LM leaves the engine unable to invoke after a `close()`; the app detects it and asks the officer to reopen the app, and the choice is remembered so the restart is cheap.
 
 **Pin the version:** replace `^` in package.json with an exact pin.
 **Known crash:** `litertlm-android` 0.15/0.16 aborts the process (SIGABRT) if you pass a `suppressTokens` option. Never use it.
@@ -132,7 +173,7 @@ Performance (Google's numbers, S26 Ultra): GPU 710 MB / 22.1 tok/s decode / 0.8s
 
 ## Key implementation details
 
-- **Regulation-as-Code (runs in the app):** circular text → MiniLM embed → retrieve nearest clauses → E4B returns strict JSON `{title, owner_role, frequency, evidence_type, clause_ref}` → POST to backend to store.
+- **Regulation-as-Code (runs in the app):** circular text → MiniLM embed → retrieve nearest clauses → the model returns strict JSON `{title, owner_role, frequency, evidence_type, clause_ref}` → POST to backend to store.
 - **Charts:** model returns `{chart_type, x, y, title, caption}`; app/dashboard draws it. NEVER ask the model to draw — ask it to specify.
 - **Hash chain:** store `prev_hash` = previous evidence row's `chain_hash` per mine. Verification endpoint walks the chain, returns OK or first broken link. Demo by editing a row in DBeaver and re-running.
 - **Boundary/excavation:** hard-code a polygon crossing the boundary, `ST_Difference` for area outside, render both on Leaflet.
@@ -144,13 +185,15 @@ Performance (Google's numbers, S26 Ultra): GPU 710 MB / 22.1 tok/s decode / 0.8s
 
 ## Demo-day rules
 
-1. Validate on the S24+ tonight with Google AI Edge Gallery (download E4B, airplane mode, use it — zero code, 15 min).
+1. Validate on the demo handset with Google AI Edge Gallery (airplane mode, zero code, 15 min) before trusting any model in the app.
 2. Do the native build before travel — Gradle resolving a native dep on venue wifi loses evenings.
 3. **On-device is your ONLY LLM path — there is no server fallback.** So: validate early, build native early, and record an **OBS video** of everything working the night before.
 4. **Feature freeze at hour 30.** Not a suggestion.
 5. Tools: `scrcpy` mirrors phone to projector over USB; the free tunnel (`cloudflared tunnel --url http://localhost:8000`, no signup) only carries phone↔laptop DATA sync, never the LLM.
 
-**Target offline demo:** phone in airplane mode, officer says in Hindi "gas reading is high in panel three" → E4B (on-device, no network) transcribes, maps to Regulation 46, drafts observation with clause cited, drops in sync queue. 30 seconds, no other team will have it.
+**Target offline demo:** phone in airplane mode, officer TYPES "gas reading is high in panel three" → the on-device model (no network) maps it to the retrieved clause, drafts an observation with the citation, and drops it in the sync queue.
+
+*The spoken-Hindi version is gone.* Only the Gemma 4 family does native audio in LiteRT-LM and it was too slow on this handset to keep. Demo the airplane-mode + hash-chain + boundary-breach moments instead; they are deterministic and cannot stall.
 
 ---
 

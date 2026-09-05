@@ -1,9 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
+import { FileText, Image as ImageIcon, ImageOff } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { api, openReport } from "../api/client";
 import { useAuth } from "../lib/auth";
 import { Badge, Clause, Empty, Panel } from "../lib/ui";
+import undergroundBg from "../assets/photos/underground-wide.jpg";
+import PageHero from "../lib/PageHero";
 
 /**
  * The evidence a regulator would actually want to look at.
@@ -75,12 +78,34 @@ function Photo({ id, has }: { id: number; has: boolean }) {
     };
   }, [id, has]);
 
+  // A flat grey rectangle reads as a broken image. These states are drawn
+  // instead, so "this capture is a written observation" looks deliberate -
+  // which it is; not every duty is evidenced by a photograph.
   const shell =
-    "flex h-40 w-full items-center justify-center bg-slate-100 text-xs text-[var(--ink-soft)]";
+    "flex h-40 w-full flex-col items-center justify-center gap-1.5 " +
+    "bg-gradient-to-b from-slate-50 to-slate-100 text-[11px] text-[var(--ink-soft)]";
 
-  if (!has) return <div className={shell}>observation only</div>;
-  if (failed) return <div className={shell}>photo unavailable</div>;
-  if (!src) return <div className={shell}>loading…</div>;
+  if (!has)
+    return (
+      <div className={shell}>
+        <FileText size={22} className="opacity-45" />
+        <span>observation only — no photograph</span>
+      </div>
+    );
+  if (failed)
+    return (
+      <div className={shell}>
+        <ImageOff size={22} className="opacity-45" />
+        <span>photo unavailable</span>
+      </div>
+    );
+  if (!src)
+    return (
+      <div className={`${shell} animate-pulse`}>
+        <ImageIcon size={22} className="opacity-45" />
+        <span>loading…</span>
+      </div>
+    );
   return (
     <img
       src={src}
@@ -159,6 +184,16 @@ export default function Evidence() {
 
   return (
     <div className="space-y-4">
+      <PageHero
+        image={undergroundBg}
+        eyebrow="Field capture"
+        title="Evidence, hashed at the moment it was taken"
+      >
+        Every capture stores the previous record's hash for this mine. Alter one
+        row and every hash after it stops matching — which is what makes
+        back-dating detectable rather than merely discouraged.
+      </PageHero>
+
       <Panel
         title="Evidence chain"
         right={

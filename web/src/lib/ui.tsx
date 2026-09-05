@@ -1,3 +1,4 @@
+import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
 export function Panel({
@@ -13,7 +14,7 @@ export function Panel({
 }) {
   return (
     <section
-      className={`rounded-lg border border-[var(--line)] bg-[var(--panel)] ${className}`}
+      className={`rounded-xl border border-[var(--line)] bg-[var(--panel)] shadow-sm ${className}`}
     >
       {title && (
         <header className="flex items-center justify-between border-b border-[var(--line)] px-4 py-2.5">
@@ -90,25 +91,57 @@ export function Stat({
   value,
   hint,
   tone = "default",
+  icon: Icon,
 }: {
   label: string;
   value: ReactNode;
   hint?: string;
   tone?: "default" | "bad" | "good" | "warn";
+  icon?: LucideIcon;
 }) {
+  // Tone drives three things at once - the number, the icon chip and the rule
+  // down the left edge - so the card's state is legible from across a room,
+  // which is the actual viewing distance during a demo.
   const tones = {
-    default: "text-[var(--ink)]",
-    bad: "text-red-700",
-    good: "text-emerald-700",
-    warn: "text-amber-700",
-  };
+    default: {
+      value: "text-[var(--ink)]",
+      rule: "bg-slate-300",
+      chip: "bg-slate-100 text-slate-500",
+    },
+    bad: {
+      value: "text-red-700",
+      rule: "bg-red-500",
+      chip: "bg-red-50 text-red-600",
+    },
+    good: {
+      value: "text-emerald-700",
+      rule: "bg-emerald-500",
+      chip: "bg-emerald-50 text-emerald-600",
+    },
+    warn: {
+      value: "text-amber-700",
+      rule: "bg-amber-500",
+      chip: "bg-amber-50 text-amber-600",
+    },
+  }[tone];
+
   return (
-    <div className="rounded-lg border border-[var(--line)] bg-[var(--panel)] px-4 py-3">
-      <div className="text-[11px] font-medium uppercase tracking-wide text-[var(--ink-soft)]">
-        {label}
-      </div>
-      <div className={`mt-1 text-2xl font-semibold tabular-nums ${tones[tone]}`}>
-        {value}
+    <div className="relative overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--panel)] px-4 py-3 shadow-sm">
+      <span className={`absolute inset-y-0 left-0 w-1 ${tones.rule}`} />
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="text-[11px] font-medium uppercase tracking-wide text-[var(--ink-soft)]">
+            {label}
+          </div>
+          <div className={`mt-1 text-2xl font-semibold tabular-nums ${tones.value}`}>
+            {value}
+          </div>
+        </div>
+        {Icon && (
+          <span className={`grid size-7 shrink-0 place-items-center rounded-lg ${tones.chip}`}>
+            <Icon size={15} />
+          </span>
+        )}
       </div>
       {hint && (
         <div className="mt-0.5 text-[11px] text-[var(--ink-soft)]">{hint}</div>
@@ -117,10 +150,22 @@ export function Stat({
   );
 }
 
-export function Empty({ children }: { children: ReactNode }) {
+/**
+ * An empty panel that says only "no data" reads as broken. Pair the sentence
+ * with a drawn placeholder and it reads as a designed state instead - which
+ * matters because a judge may see this dashboard before the simulator starts.
+ */
+export function Empty({
+  children,
+  art,
+}: {
+  children: ReactNode;
+  art?: ReactNode;
+}) {
   return (
-    <div className="py-8 text-center text-sm text-[var(--ink-soft)]">
-      {children}
+    <div className="flex flex-col items-center justify-center gap-2 py-8 text-center text-sm text-[var(--ink-soft)]">
+      {art && <div className="text-[var(--ink-soft)]">{art}</div>}
+      <p className="max-w-xs">{children}</p>
     </div>
   );
 }

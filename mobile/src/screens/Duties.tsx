@@ -12,6 +12,8 @@ import {
 import { fetchDuties, type Duty } from "../lib/api";
 import { cacheDuties, readCachedDuties } from "../lib/db";
 import { C, mono } from "../theme";
+import ScreenHero from "../components/ScreenHero";
+import { FIELD_PHOTO } from "../lib/photos";
 
 const GROUPS = [
   { key: "overdue", label: "OVERDUE" },
@@ -73,14 +75,21 @@ export default function Duties({
         <RefreshControl refreshing={false} onRefresh={load} tintColor={C.accent} />
       }
       ListHeaderComponent={
-        fromCache ? (
-          <View style={s.cacheNote}>
-            <Text style={s.cacheText}>
-              Showing duties cached at{" "}
-              {new Date(fromCache).toLocaleTimeString()} — no signal
-            </Text>
-          </View>
-        ) : null
+        <>
+          <ScreenHero
+            photo={FIELD_PHOTO}
+            title="Today's statutory duties"
+            subtitle="ranked by risk · every row cites its clause"
+          />
+          {fromCache ? (
+            <View style={s.cacheNote}>
+              <Text style={s.cacheText}>
+                Showing duties cached at{" "}
+                {new Date(fromCache).toLocaleTimeString()} — no signal
+              </Text>
+            </View>
+          ) : null}
+        </>
       }
       renderItem={({ item }) => {
         if ("header" in item)

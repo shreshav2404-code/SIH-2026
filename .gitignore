@@ -56,3 +56,12 @@ models-archive/
 /*.png
 /*.xml
 /*.log
+
+# Training artefacts. The dataset and the tuned GGUF are reproducible from
+# tools/build_dataset.py and tools/train.py, and the checkpoints are large.
+.venv-train/
+out/
+data/*.jsonl
+tools/llama.cpp/
+tools/llama-bin/
+tools/llama-win.zip

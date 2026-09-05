@@ -18,6 +18,7 @@ from auth import current_user, resolve_mine_id
 from db import get_db
 from models import Alert, Mine, Obligation, SensorReading, Statute, User
 from schemas import ReadingOut, ReadingsIn, WindowOut, WindowStats
+from services import locations
 from services.hazard import alert_message, evaluate, threshold_for
 
 router = APIRouter(prefix="/sensors", tags=["sensors"])
@@ -44,7 +45,11 @@ def ingest(body: ReadingsIn, db: Session = Depends(get_db)) -> dict:
     probabilistic system.
     """
     fired: list[dict] = []
-    touched: set[tuple[int, str]] = set()
+    # Keyed by PLACE as well as sensor. Methane over the limit in the return
+    # airway of District 3 and methane over the limit at the main return are
+    # two events at two places, and collapsing them into one hides whichever
+    # arrived second - including the worse one.
+    touched: set[tuple[int, str, str | None]] = set()
 
     for r in body.readings:
         db.add(
@@ -54,15 +59,16 @@ def ingest(body: ReadingsIn, db: Session = Depends(get_db)) -> dict:
                 value=r.value,
                 unit=r.unit,
                 recorded_at=r.recorded_at,
+                location=r.location,
             )
         )
-        touched.add((r.mine_id, r.sensor_type))
+        touched.add((r.mine_id, r.sensor_type, r.location))
     db.flush()
 
     now = datetime.now(UTC)
     since = now - timedelta(minutes=WINDOW_MINUTES)
 
-    for mine_id, sensor_type in touched:
+    for mine_id, sensor_type, location in touched:
         cfg = threshold_for(sensor_type)
         if not cfg:
             continue
@@ -72,6 +78,7 @@ def ingest(body: ReadingsIn, db: Session = Depends(get_db)) -> dict:
             .where(
                 SensorReading.mine_id == mine_id,
                 SensorReading.sensor_type == sensor_type,
+                SensorReading.location == location,
                 SensorReading.recorded_at >= since,
             )
             .order_by(SensorReading.recorded_at)
@@ -89,6 +96,7 @@ def ingest(body: ReadingsIn, db: Session = Depends(get_db)) -> dict:
             .where(
                 Alert.mine_id == mine_id,
                 Alert.message.like(f"%{sensor_type.replace('_', ' ')}%"),
+                Alert.location.is_(None) if location is None else Alert.location == location,
                 Alert.created_at >= now - timedelta(minutes=COOLDOWN_MINUTES),
             )
             .limit(1)
@@ -123,8 +131,13 @@ def ingest(body: ReadingsIn, db: Session = Depends(get_db)) -> dict:
             obligation_id=_obligation_for_clause(db, mine_id, clause_ref),
             clause_ref=clause_ref,
             severity=severity,
+            location=location,
             message=(
                 alert_message(sensor_type, stats, rows[-1].unit)
+                # The place is the actionable half. "Methane is high" sends
+                # nobody anywhere; "methane is high in the return airway of
+                # District 3" does.
+                + (f" AT {locations.label_for(location)}." if location else "")
                 + (" Monitoring only - no clause in the corpus covers this reading." if monitoring_only else "")
             ),
             source="rule",
@@ -132,7 +145,12 @@ def ingest(body: ReadingsIn, db: Session = Depends(get_db)) -> dict:
         db.add(alert)
         db.flush()
         fired.append(
-            {"id": alert.id, "severity": alert.severity, "clause_ref": clause_ref}
+            {
+                "id": alert.id,
+                "severity": alert.severity,
+                "clause_ref": clause_ref,
+                "location": location,
+            }
         )
 
     db.commit()
@@ -207,3 +225,14 @@ def window(
         stats=WindowStats(**{k: stats[k] for k in ("mean", "max", "z_max", "threshold", "breaching")}),
         clause=clause,
     )
+
+
+@router.get("/locations")
+def list_locations() -> list[dict]:
+    """Statutory monitoring points, for the handset's picker.
+
+    No auth, matching /readings: the same gateway that posts readings needs to
+    know what the valid places are, and the catalogue is not sensitive - it is
+    a description of where regulation says to measure.
+    """
+    return locations.catalogue()

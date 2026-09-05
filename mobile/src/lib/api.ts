@@ -15,7 +15,7 @@ const SERVER_KEY = "anupalan.server";
  * A release APK is handed to a teammate whose laptop has a different IP, and
  * at a venue it may have to go through a tunnel URL instead. Baking the host
  * into the binary makes changing one string cost a full rebuild that
- * repackages 3.66 GB of model, so the compiled value in config.ts is only the
+ * repackages roughly a gigabyte of model, so the compiled value in config.ts is only the
  * default - whatever is saved here wins.
  */
 /** How the API was reached last time discovery ran. Null until it has. */
@@ -183,4 +183,80 @@ export async function ping(): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+// ---------------------------------------------------------------- sensors
+
+/**
+ * A statutory monitoring point.
+ *
+ * Regulation names places, not mines: the methane limit applies in the general
+ * body of return air of a district. A reading without one of these is not
+ * actionable, so the console makes the officer pick before it will send.
+ */
+export interface SensorPoint {
+  key: string;
+  label: string;
+  sensor_types: string[];
+  method: "underground" | "opencast" | "both";
+  why: string;
+}
+
+export async function fetchSensorPoints(): Promise<SensorPoint[]> {
+  const { data } = await api.get<SensorPoint[]>("/sensors/locations");
+  return data;
+}
+
+export interface FiredAlert {
+  id: number;
+  severity: string;
+  clause_ref: string | null;
+  location: string | null;
+}
+
+/** Post one reading. Returns any alerts the backend's arithmetic fired. */
+export async function pushReading(input: {
+  mine_id: number;
+  sensor_type: string;
+  value: number;
+  unit: string;
+  location: string;
+}): Promise<FiredAlert[]> {
+  const { data } = await api.post<{ alerts_fired: FiredAlert[] }>(
+    "/sensors/readings",
+    {
+      readings: [{ ...input, recorded_at: new Date().toISOString() }],
+    },
+  );
+  return data.alerts_fired ?? [];
+}
+
+// ------------------------------------------------------------- directives
+
+/** An instruction from the control room that this handset must acknowledge. */
+export interface Directive {
+  id: number;
+  mine_id: number;
+  alert_id: number | null;
+  severity: string;
+  location: string | null;
+  location_label: string | null;
+  message: string;
+  action: string | null;
+  created_at: string;
+  issued_by_name: string | null;
+  acknowledged_at: string | null;
+  acknowledged_by_name: string | null;
+}
+
+export async function fetchOpenDirectives(): Promise<Directive[]> {
+  const { data } = await api.get<Directive[]>("/directives", {
+    params: { open_only: true },
+  });
+  return data;
+}
+
+export async function ackDirective(id: number): Promise<Directive> {
+  const { data } = await api.post<Directive>(`/directives/${id}/ack`);
+  return data;
 }

@@ -10,6 +10,8 @@ import type {
 } from "../api/types";
 import { useAuth } from "../lib/auth";
 import { Badge, Clause, Empty, Panel } from "../lib/ui";
+import railsBg from "../assets/photos/rails-wide.jpg";
+import PageHero from "../lib/PageHero";
 
 /** A DGMS-style circular, so the demo mines real statutory language. */
 const SAMPLE = `Circular No. DGMS(Tech)/2026/14
@@ -113,6 +115,16 @@ export default function Rulebook() {
 
   return (
     <div className="grid gap-4">
+      <PageHero
+        image={railsBg}
+        eyebrow="Regulation-as-Code"
+        title="Circular text in, structured duties out"
+      >
+        A statutory circular is retrieved, read on the device, and returned as a
+        duty with an owner, a frequency and the clause it came from. The model
+        drafts; a qualified person still signs.
+      </PageHero>
+
       <div className="rounded-lg border border-[var(--line)] bg-[var(--panel)] px-4 py-3">
         <h1 className="text-sm font-semibold">Regulation-as-Code</h1>
         <p className="mt-1 text-xs leading-relaxed text-[var(--ink-soft)]">

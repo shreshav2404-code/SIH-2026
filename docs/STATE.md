@@ -1,6 +1,19 @@
-# Where we left off — 2026-09-03, 03:40
+# Where we left off — 2026-09-04, 17:40
 
-Pick up here next time. Everything is committed; nothing is half-finished.
+Pick up here next time.
+
+**Blocked, and not on the project:** the release build cannot run. Gradle's
+daemon binds `127.0.0.1` and then Java cannot complete the loopback
+self-connect it needs (`java.net.SocketException: Invalid argument: connect`).
+Ruled out: stale daemons, java firewall rules, VPNs, forcing IPv4 and IPv6.
+PowerShell binds loopback fine, so it is Java specifically, and it built
+successfully at 16:28 the same day. Fix is `netsh winsock reset` in an admin
+terminal followed by a reboot, then:
+
+    cd mobile/android && ./gradlew assembleRelease -PbundleModel=true
+
+All source changes below are written and typecheck clean; none has run on the
+phone.
 
 ---
 
@@ -26,8 +39,8 @@ adb emu geo fix 82.57 22.34        # an emulator has NO GPS - capture hangs with
 cd D:/anupalan/mobile && npx expo start --dev-client --port 8081
 ```
 
-The APK is already installed on the AVD and the 3.66 GB model is already in the
-app's storage, so neither needs redoing. If you reinstall the app, the model
+The APK is already installed on the AVD and the models are already in the app's
+storage, so neither needs redoing. If you reinstall the app, the model
 goes with it - see docs/ANDROID_BUILD.md for the run-as push.
 
 ---
@@ -50,8 +63,8 @@ regulation number on screen.
 ## What cannot work here
 
 The on-device model. `LiteRTLMPackage` refuses x86_64 at runtime and Emulator
-37.x dropped ARM translation, so Gemma needs a physical arm64 Android phone.
-The Ask tab detects the model (3.66 GB, "installed in app storage") and fails
+37.x dropped ARM translation, so the models need a physical arm64 Android phone.
+The Ask tab detects the models ("installed in app storage") and fails
 with a clear explanation rather than crashing.
 
 ## The release APK on a physical phone (3 Sep)
@@ -76,13 +89,116 @@ The laptop's IP had already drifted from `.36` to `.101`, and each such change
 otherwise cost a rebuild that repackages 3.66 GB.
 
 Both changes are verified on the emulator against live Metro - Login renders
-the Server line and signs in over the LAN IP - but **whether Gemma 4 E4B
-actually loads on the M31s is still open**, and needs the rebuilt APK.
+the Server line and signs in over the LAN IP. Gemma 4 E4B was later confirmed
+to load on the M31s (GPU/4096, 45 s, 3.3 GB) and then dropped anyway: it took
+144 seconds to answer. See Phase 7.
+
+## Phase 8 - the model was trained here (5 Sep)
+
+**There is now a model fine-tuned on this project**, built on the laptop's own
+RTX 4050. Nothing was uploaded: the corpus, the training and the weights all
+stayed on the machine, which is the same premise as the rest of the system.
+
+    tools/build_dataset.py   1,078 examples from the clause corpus, the ledger
+                             and these docs. Nothing invented - every answer
+                             traces to a file or a database row.
+    tools/train.py           full fine-tune of Gemma 3 270M, --epochs/--lr
+    tools/eval.py            grounded / recall / unrelated batteries
+    models/gemma-anupalan-Q4_0.gguf   238 MB, 117 tok/s on the laptop
+
+**Seven rounds, and the failures were all in the data, not the training.**
+
+1. Clause examples were 47% of the corpus, so the model answered EVERYTHING in
+   clause style - asked "does this need internet" it cited a lease boundary.
+2. The answers were 40-word paragraphs. It learned the opening phrase and then
+   drifted into invention: "A tamper-evident ledger" followed by nonsense about
+   prime numbers.
+3. Facts were taught as `fact + question -> the fact`, which teaches ECHO, not
+   answering. Rewriting the target as a direct answer derived from the fact
+   repaired three failures at once.
+
+**Ten epochs was worse than six.** The longer run produced self-contradicting
+answers ("No. It runs entirely on this device and only needs internet"). Six is
+the setting; more training made it worse, which is only visible by reading the
+output.
+
+**Recall does not work at 270M, so facts moved into the prompt.** See
+mobile/src/lib/facts.ts - twelve system facts with rarity-weighted keyword
+retrieval, injected before the question. Recall becomes reading, which the
+model does well. An early version of that router listed "what" and "how" as
+keys, so "what is the capital of France" had a paragraph about compliance
+monitoring pushed in front of it.
+
+**Three facts bypass the model entirely.** "Can this file a statutory return"
+came back "Yes" in six consecutive rounds even with the correct fact in the
+prompt - the base model's yes/no prior is immovable at this size. Filing,
+offline operation and hazard detection are now returned verbatim from the
+table by code. A compliance tool claiming it can file returns is not a rough
+edge; it is a false statement about the software, and the project's own rule
+says a statement like that cannot depend on a probabilistic system.
+
+## Phase 7 — measured, then cut (4 Sep, evening)
+
+**The lag was never the model. It was the context window.** Measured on the
+M31s from a cold start, at `maxContextTokens: 4096` every model landed in the
+same place regardless of its size:
+
+| model | on disk | resident |
+|---|---|---|
+| Qwen2.5 1.5B | 1.49 GB | 4,079 MB |
+| Falcon-H1 0.6B R | 833 MB | 4,459 MB |
+| Granite 4.0 350M | 459 MB | 3,984 MB |
+
+`GL mtrack` was 9 MB throughout — the Mali GPU was barely used, whatever the
+green header claimed. The KV cache is allocated up front and scales with the
+window, so it dwarfed the weights. This took a 7.7 GB phone down to 1.4 GB
+available and made Android kill background processes by the dozen;
+force-stopping the app returned 4 GB instantly. **LOAD_LADDER now starts at
+gpu/1024** and falls to cpu/512. Nothing here needs more: a ledger prompt is
+ten duties against a 150-token answer cap.
+
+**Three models, 984 MB of weights** (was 3.43 GB across four):
+
+| model | size | role |
+|---|---|---|
+| Granite 4.0 350M | 459 MB | default; template is trained for document-grounded answers |
+| SmolLM2 360M Instruct | 356 MB | best chat quality per megabyte |
+| LFM2.5 230M int4 | 169 MB | `chatOnly` — plain chat, never given the ledger |
+
+**`chatOnly` is a hard branch, not a lighter prompt.** A 230M model cannot
+reliably copy a clause reference, and that failure is not quiet — it invents a
+plausible regulation number. Qwen wrote "Mines Rules 1555" once, one digit off
+a real statute. So the smallest model skips `askLedger()` entirely, gets no
+duty table, no citation audit and no compliance quick-actions, and every reply
+it produces is captioned *plain chat — NOT grounded in the ledger*.
+
+**Template leakage is stripped at a single choke point.** Typing "Hi bro" at
+Qwen2.5 produced `<|im_start|>assistant` followed by mangled fragments of the
+prompt: a greeting has no answer in a ledger prompt, so the model degenerated
+into emitting its own turn markers. All six call sites now route through
+`generate()`, which truncates at the first template marker and sanitises
+streamed tokens as well. Greetings are additionally short-circuited in
+`Ask.tsx` and answered without the model at all — instant, and it cannot
+hallucinate.
+
+**Two bugs found by looking rather than reasoning.** A Kotlin stack trace
+(`HybridLiteRTLM.ensureLoaded`) was being rendered into the chat as an answer —
+now `briefError()` keeps the first line. And `mergeReleaseAssets/` still held a
+complete Qwen2.5 and Falcon-H1 after they left the registry: 2.3 GB that would
+have shipped silently and pushed the APK back at the 4 GiB ZIP32 ceiling. The
+build guard only inspected `models/`, so it saw nothing. It now sweeps the
+merged directory too.
+
+**Not yet measured:** none of the three has been run at 1024 context. Every
+number above is from 4096. The rebuild is blocked on a Windows fault, not the
+project — Gradle cannot bind loopback (`SocketException: Invalid argument:
+connect`); needs `netsh winsock reset` as admin and a reboot.
 
 ## Phases 1-6 (4 Sep)
 
-**Two models, one resident.** Qwen3-1.7B (0.91 GB) is the default; Gemma 4 E2B
-(2.59 GB) loads on demand for speech and photographs. `switchModel()` closes the
+**Two models, one resident.** *(Superseded by Phase 7 — the set is now three
+small models and neither of these ships.)* Qwen3-1.7B (0.91 GB) was the
+default; Gemma 4 E2B (2.59 GB) loaded on demand for speech and photographs. `switchModel()` closes the
 current model before loading the next, so they never coexist — E2B alone peaks
 at 2.5 GB on a 7.5 GB phone. A picker on the gate screen and a switcher in the
 chat header change it mid-conversation.
