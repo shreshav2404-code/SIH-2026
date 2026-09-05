@@ -26,14 +26,21 @@ Every figure in it was measured on the running system rather than estimated.
 
 ## A note on imagery
 
-Photographs in `web/src/assets/photos/` and the mobile bundle:
+Every photograph shipped in the dashboard and the app is free for commercial
+use, carries no watermark, and requires no attribution. Recorded here because a
+government-facing tool should be able to account for every asset it ships:
 
-- **`field-*.jpg`** — Pexels (17971746), Pexels licence, free for commercial use
-- **`excavator-*.jpg`** — Pixabay (2781679), Pixabay licence, free for commercial use
-- **`underground-wide.jpg`, `rails-wide.jpg`, `seam-wide.jpg`** — supplied by the
-  team. No watermark and no third-party logo, but the origin is unconfirmed.
-  **Replace these with Pexels or Unsplash equivalents before any public
-  release or publication.**
+| Asset | Source | Licence |
+|---|---|---|
+| `field-*.jpg` | Pexels 17971746 | Pexels |
+| `excavator-*.jpg` | Pixabay 2781679 | Pixabay |
+| `underground-wide.jpg` | Unsplash `Tg8RbF_QVBw` — Vedrana Filipović | Unsplash |
+| `rails-wide.jpg` | Unsplash `F1B0-iuAxO4` — Dominik Vanyi | Unsplash |
+| `seam-wide.jpg` | Unsplash `Sy_8KuxLwBI` — Albert Hyseni | Unsplash |
+
+The three Unsplash images replaced earlier ones that carried no watermark but
+had unconfirmed origin. Attribution is not required by any of these licences;
+it is recorded anyway so the question never has to be re-answered.
 
 Several images that were considered are deliberately absent from this
 repository: material still carrying a Chegg logo, a Shutterstock identifier or
