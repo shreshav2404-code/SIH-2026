@@ -83,6 +83,42 @@ API docs at http://localhost:8000/docs · dashboard at http://localhost:5173
 
 ---
 
+## The submission
+
+Everything handed in, plus the working notes behind it, is in [`submission/`](submission/).
+
+| Document | |
+|---|---|
+| [Pitch deck](submission/NeuraForge_SIH26024_Idea_Submission.pptx) | as submitted — also [as PDF](submission/NeuraForge_SIH26024_Idea_Submission.pdf) |
+| [**Change catalogue**](submission/ANUPALAN-deck-update.pdf) | **read this first** — what the running system does that the deck predates |
+| [Presentation crib](submission/NeuraForge_SIH26024_Presentation_Crib.pdf) | speaking notes |
+| [Prototype build plan](submission/NeuraForge_SIH26024_Prototype_Build_Plan.pdf) | the 36-hour plan |
+| [Domain research](submission/NeuraForge_SIH26024_Domain_Research.docx) | statutory and domain groundwork |
+| [Wireframes](submission/wireframes/) | early dashboard and field-app sketches |
+
+The deck was written before the prototype was built, so several of its claims are
+now understated and a few are wrong — the runtime changed, and the hash-chain
+claim was only made literally true late in the build. The change catalogue lists
+every delta with the slide it lands on, and every figure in it was measured on
+the running system rather than estimated.
+
+---
+
+## Checks
+
+```bash
+cd api  && python -m pytest tests/ -q   # 29 tests, no database needed
+cd web  && npm run check                # typecheck + lint
+cd mobile && npm run typecheck
+```
+
+The tests cover the deterministic half — the hash chain, both breach triggers,
+and the locations catalogue. They deliberately stop there: a CI runner cannot
+verify a model answering a ledger question or a GGUF loading on a Mali GPU, and
+a green tick implying otherwise would be worse than no tick.
+
+---
+
 ## Cost
 
 **₹0.** Everything is free and open source, nothing runs in the cloud. The model runs
