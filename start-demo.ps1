@@ -40,7 +40,7 @@ Say "1. Database"
 #   - An earlier version of this script launched Docker itself. Do not put that
 #     back. Scripted start/stop of Docker Desktop left orphaned socket files in
 #     %LOCALAPPDATA%\Docker
-un that Windows would not delete, and Docker then
+#     run that Windows would not delete, and Docker then
 #     refused to start with "The file cannot be accessed by the system" until a
 #     reboot. Letting a person start it from the Start menu avoids that whole
 #     class of problem.
