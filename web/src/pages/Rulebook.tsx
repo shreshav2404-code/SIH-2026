@@ -120,9 +120,10 @@ export default function Rulebook() {
         eyebrow="Regulation-as-Code"
         title="Circular text in, structured duties out"
       >
-        A statutory circular is retrieved, read on the device, and returned as a
-        duty with an owner, a frequency and the clause it came from. The model
-        drafts; a qualified person still signs.
+        MiniLM embeds the circular a sentence at a time and retrieves the
+        governing clauses from the corpus. The duty fields below are pre-filled
+        deterministically from what was retrieved — nothing here is generated —
+        and a qualified person edits and commits them.
       </PageHero>
 
       <div className="rounded-lg border border-[var(--line)] bg-[var(--panel)] px-4 py-3">
