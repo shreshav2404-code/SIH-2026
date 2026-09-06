@@ -1,92 +1,97 @@
 # Getting the phone and the laptop talking
 
-The app needs to reach the API. There are three ways, and they are listed in
-the order you should try them at a venue.
+Verified end to end on 2026-09-06 with the USB cable unplugged: the app found
+the API by itself and signed in. Wireless works. The cable is a fallback, not a
+requirement.
 
-## Why the obvious way fails
-
-Both devices on the same wifi is the obvious answer and it does not work here.
-Measured from the handset on 2026-09-06, with laptop and phone on the same
-`192.168.1.0/24`:
+## What was measured
 
 | Test | Result |
 |---|---|
 | API listening | `0.0.0.0:8000` |
-| Laptop -> its own LAN IP | HTTP 200 |
-| Firewall rule `ANUPALAN API 8000` | Enabled, Allow, all profiles |
-| Phone -> laptop `:8000` | closed |
-| Phone -> laptop `:5173` | closed |
-| Phone -> laptop `:445` | closed |
-| Phone -> laptop ICMP | 100% loss |
+| Firewall rule `ANUPALAN API 8000` | Enabled, Allow, any profile, any interface |
+| Laptop hotspot `LEGION 6811` | On, sharing Ethernet, laptop at `192.168.137.1` |
+| Phone joined | `192.168.137.96`, 5 GHz, 433 Mbps |
+| App discovery, no cable | found `http://192.168.1.101:8000`, "over wifi" |
+| Sign-in and duty list | worked, and the API log shows the phone's requests |
 
-Every port was unreachable, not just ours, so this is not a firewall rule and
-not an app bug. The router has **client isolation** turned on: wireless clients
-cannot talk to other devices. College and conference wifi almost always does
-this. No change to the app can route around it.
+### A probe that lied, recorded so nobody repeats it
 
-## 1. USB cable — most reliable, use it for the demo
+An earlier pass concluded the router was isolating clients. That was wrong. It
+came from `adb shell nc -z <host> <port>`, which reported "closed" for
+**every** port on every host — including `8.8.8.8:53` and `1.1.1.1:443`, which
+are certainly open, while `ping 8.8.8.8` from the same phone had 0% loss.
+Android's toybox `nc` does not support `-z` the way the test assumed, so every
+result was a false negative.
 
-```bash
-adb reverse tcp:8000 tcp:8000
-```
+`ping` to the laptop also fails, and that means nothing either: Windows blocks
+inbound ICMP by default while still accepting TCP on an allowed port.
 
-`localhost:8000` on the phone now resolves to the laptop. It sidesteps wifi,
-addressing and the firewall completely.
+**Do not diagnose this with `nc` or `ping` from the phone.** The only probe that
+tells the truth is the app itself — its sign-in screen names the address it
+found and how it got there.
 
-**It drops silently.** If the adb daemon restarts, the cable is re-seated, or
-the phone reboots, the tunnel is gone and the app shows "Cannot reach the API".
-Re-run the command; nothing else is needed. Check it with:
+## 1. Wireless — laptop hosts the hotspot
 
-```bash
-adb reverse --list
-```
+The phone needs no SIM for this. The **laptop** is the access point.
 
-## 2. Phone's hotspot — the wireless fallback
+1. **Laptop:** Settings → Network & Internet → **Mobile hotspot** → on.
+   Share the **Ethernet** connection. The current network is `LEGION 6811`.
+2. **Phone:** join that network from wifi settings.
+3. **App:** open it. Discovery runs on its own and the sign-in screen shows the
+   address and route, e.g. "Server: http://192.168.1.101:8000 · over wifi".
 
-The phone becomes the router, so there is no other router to isolate anything.
+The laptop keeps Ethernet at the same time, so it does not lose internet, and
+the phone gets internet through it.
 
-1. **Phone:** Settings → Connections → Mobile Hotspot and Tethering → turn on
-   **Mobile Hotspot**. Mobile data is not required — the hotspot still forms a
-   local network without it, which is all the demo needs.
-2. **Laptop:** join that hotspot from the wifi menu. Windows will ask whether
-   the network is public or private; either works, because the firewall rule
-   covers all profiles.
-3. **Laptop:** leave the Ethernet cable plugged in if you want internet. Windows
-   holds both, and the API listens on every interface.
-4. **App:** sign out and back in, or press **change** on the sign-in screen and
-   then rediscover. It sweeps `192.168.43.1-12` and `192.168.137.1-12`
-   automatically and shows "over the phone's hotspot" when it lands.
-
-Confirm the laptop actually picked up a hotspot address:
+Check the laptop is actually hosting:
 
 ```bash
 ipconfig | findstr /C:"IPv4"
 ```
 
-You want a `192.168.43.x` (or `192.168.137.x`) alongside the wired address.
+You want a `192.168.137.x` alongside the wired address.
 
-## 3. Type the address by hand — last resort
+## 2. USB cable — the fallback
 
-On the sign-in screen tap **change** and enter `http://<laptop-ip>:8000`. Get
-the address from the `ipconfig` above. Use this when discovery is slow or the
-laptop landed outside the swept range.
+```bash
+adb reverse tcp:8000 tcp:8000
+```
+
+`localhost:8000` on the phone becomes the laptop. It sidesteps wifi and
+addressing entirely.
+
+**It drops silently** when the adb daemon restarts or the cable is re-seated,
+and the app then reports "Cannot reach the API". Re-run the command. Check with
+`adb reverse --list`.
+
+## 3. Type the address by hand
+
+Sign-in screen → **change** → `http://<laptop-ip>:8000`.
+
+## Untested
+
+**Both devices on the same ordinary router wifi.** An earlier attempt failed,
+but the API happened to be stopped at that moment, so the failure proves
+nothing. Venue wifi that isolates clients is a real phenomenon and would break
+it — which is why the laptop-hosted hotspot above is the recommended path. Test
+it on the venue's network before relying on it.
 
 ## What does NOT need changing
 
-- **Postgres** runs in Docker on the laptop and is only ever reached by the API
-  on the same machine. It is not exposed to the phone and does not need to be.
-- **The dashboard** runs on the laptop and is normally viewed there. It now
-  binds every interface, so if you want it on a second device during the demo,
-  open `http://<laptop-ip>:5173`.
+- **Postgres** runs in Docker on the laptop and is reached only by the API on
+  the same machine. It is never exposed to the phone.
+- **The dashboard** runs on the laptop. It now binds every interface, so
+  `http://<laptop-ip>:5173` works from a second device on the hotspot.
 
 ## Before you present
 
 ```bash
-adb reverse --list                                   # cable tunnel present
-curl -s http://localhost:8000/health                 # API up, db ok
-docker ps --filter name=anupalan-db                  # database up
+adb reverse --list                      # cable tunnel, if you want it
+curl -s http://localhost:8000/health    # API up, db ok
+docker ps --filter name=anupalan-db     # database up
+ipconfig | findstr /C:"IPv4"            # hotspot address present
 ```
 
-The model runs on the phone, so none of this affects whether ANUPALAN can
-answer a question. Losing the network costs you the ledger, the dashboard and
-sync. It does not cost you the assistant.
+The model runs on the phone. Losing the network costs the ledger, the dashboard
+and sync. It does not cost the assistant.
