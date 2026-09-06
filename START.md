@@ -2,7 +2,20 @@
 
 ## The short version
 
-Right-click **`start-demo.ps1`** and choose **Run with PowerShell**.
+1. Start **Docker Desktop** from the Start menu, wait for the whale icon to
+   settle.
+2. Right-click **`start-demo.ps1`** and choose **Run with PowerShell**.
+
+Docker is started by hand on purpose. Its autostart was removed because it
+holds about 1.5 GB of RAM doing nothing (797 MB for the WSL VM alone) on a
+16 GB laptop that also plays games. An earlier version of the script launched
+Docker itself; that is deliberately not done any more, because scripted
+start/stop left orphaned socket files in `%LOCALAPPDATA%\Dockerun` that
+Windows would not delete, and Docker then refused to start until a reboot.
+
+If Docker ever shows an error about a socket file it cannot access: **reboot**.
+Do **not** use *Reset to factory defaults* - that deletes the Postgres volume,
+and with it the ledger and the evidence chain.
 
 It starts the database, the API, the dashboard and the sensor simulator, sets
 up the phone tunnel if a cable is attached, and prints one status block. Four

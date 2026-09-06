@@ -31,15 +31,34 @@ Say "=================================="
 # ---------------------------------------------------------------- 1. Docker
 Say ""
 Say "1. Database"
+# Docker Desktop is started BY HAND before this script runs, and so is the
+# database container. That is deliberate:
+#
+#   - Docker costs about 1.5 GB of RAM sitting idle (measured: 797 MB for the
+#     WSL VM alone) on a 16 GB laptop that also plays games, so its autostart
+#     entry was removed. You pay for it only when you want the project.
+#   - An earlier version of this script launched Docker itself. Do not put that
+#     back. Scripted start/stop of Docker Desktop left orphaned socket files in
+#     %LOCALAPPDATA%\Docker
+un that Windows would not delete, and Docker then
+#     refused to start with "The file cannot be accessed by the system" until a
+#     reboot. Letting a person start it from the Start menu avoids that whole
+#     class of problem.
 docker info 2>&1 | Out-Null
 if ($LASTEXITCODE -ne 0) {
-  Bad "Docker Desktop is not running."
-  Bad "Start it from the Start menu, wait for the whale icon to settle,"
-  Bad "then run this script again."
+  Bad "The Docker engine is not responding."
+  Bad ""
+  Bad "  1. Start Docker Desktop from the Start menu"
+  Bad "  2. Wait for the whale icon in the tray to stop animating"
+  Bad "  3. Run this script again"
+  Bad ""
+  Bad "If Docker itself reports an error about a socket file it cannot access,"
+  Bad "reboot. Do NOT use 'Reset to factory defaults' - that deletes the"
+  Bad "Postgres volume, and with it the ledger and the evidence chain."
   if (-not $NoPause) { Read-Host "Press Enter to close" }
   exit 1
 }
-Ok "Docker Desktop is running"
+Ok "Docker engine responding"
 
 docker compose up -d db 2>&1 | Out-Null
 # Postgres accepts connections a moment after the container reports started,
@@ -145,8 +164,13 @@ $hotspot = (Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
   Where-Object { $_.IPAddress -like '192.168.137.*' } | Select-Object -First 1).IPAddress
 if ($hotspot) {
   Ok "hotspot up, laptop is $hotspot"
+} elseif ($devices.Count -gt 0) {
+  # The cable is doing the job, so the hotspot is not needed. Say so rather
+  # than warning about something that is deliberately off.
+  Say "  ----  hotspot off, not needed - the cable is connected"
 } else {
-  Warn "hotspot off - Settings, Network and Internet, Mobile hotspot, share Ethernet"
+  Warn "no cable and no hotspot. Turn the hotspot on:"
+  Warn "  Settings, Network and Internet, Mobile hotspot, share Ethernet"
 }
 
 $lan = (Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
