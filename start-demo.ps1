@@ -75,8 +75,13 @@ if ($ready) { Ok "Postgres healthy (anupalan-db)" } else { Bad "Postgres not hea
 Say ""
 Say "2. API"
 $apiUp = $false
+  # 127.0.0.1, never 'localhost'. On this machine localhost resolves to ::1
+  # first and uvicorn binds 0.0.0.0 - IPv4 only - so Invoke-RestMethod tries
+  # IPv6, hangs, and times out against an API that is answering perfectly well.
+  # curl hid this for weeks because it falls back to IPv4 in milliseconds.
+  # Vite binds dual-stack, which is why the dashboard check never showed it.
 try {
-  $r = Invoke-RestMethod -Uri 'http://localhost:8000/health' -TimeoutSec 3
+  $r = Invoke-RestMethod -Uri 'http://127.0.0.1:8000/health' -TimeoutSec 3
   if ($r.status -eq 'ok') { $apiUp = $true; Ok "already running" }
 } catch { }
 
@@ -86,22 +91,31 @@ if (-not $apiUp) {
             "`$host.UI.RawUI.WindowTitle = 'ANUPALAN API'; " +
             "& '$root\.venv\Scripts\python.exe' -m uvicorn main:app --host 0.0.0.0 --port 8000"
   Start-Process powershell -ArgumentList '-NoExit', '-Command', $apiCmd
-  # Ninety seconds, not twenty-five. The API imports sentence-transformers at
-  # module load to embed the clause corpus, and that pulls in torch - measured
-  # at just over 25s on this laptop, which made an earlier version report FAIL
-  # on an API that was starting perfectly well.
-  Say "     loading the embedding model, this takes up to a minute..."
-  foreach ($i in 1..90) {
+  # Five minutes, not ninety seconds. Measured on this laptop: about 2s once
+  # the imports are in the OS page cache, but well over 90s on the first run
+  # after a reboot, when torch and sentence-transformers are read cold from
+  # disk. A 90s limit reported FAIL on an API that came up fine moments later,
+  # which is the worst kind of wrong answer. Progress is printed so a slow
+  # start never looks like a hang.
+  Say "     loading the embedding model. Cold start after a reboot takes"
+  Say "     a few minutes; once warm it is about 2 seconds."
+  foreach ($i in 1..300) {
     Start-Sleep -Seconds 1
+    if ($i % 15 -eq 0) { Say "     still loading (${i}s)..." }
     try {
-      $r = Invoke-RestMethod -Uri 'http://localhost:8000/health' -TimeoutSec 2
+      $r = Invoke-RestMethod -Uri 'http://127.0.0.1:8000/health' -TimeoutSec 2
       if ($r.status -eq 'ok') { $apiUp = $true; break }
     } catch { }
   }
-  if ($apiUp) { Ok "started on :8000 (took ${i}s)" } else { Bad "did not come up in 90s - check the API window" }
+  if ($apiUp) {
+    Ok "started on :8000 (took ${i}s)"
+  } else {
+    Warn "not answering yet after 5 minutes. It is probably still loading -"
+    Warn "look at the ANUPALAN API window. Re-run this script once it settles."
+  }
 }
 if ($apiUp) {
-  $h = Invoke-RestMethod -Uri 'http://localhost:8000/health' -TimeoutSec 3
+  $h = Invoke-RestMethod -Uri 'http://127.0.0.1:8000/health' -TimeoutSec 3
   Ok ("db=" + $h.db + "  postgis=" + $h.postgis + "  pgvector=" + $h.pgvector)
 }
 
@@ -110,7 +124,7 @@ Say ""
 Say "3. Dashboard"
 $webUp = $false
 try {
-  $null = Invoke-WebRequest -Uri 'http://localhost:5173' -TimeoutSec 3 -UseBasicParsing
+  $null = Invoke-WebRequest -Uri 'http://127.0.0.1:5173' -TimeoutSec 3 -UseBasicParsing
   $webUp = $true; Ok "already running"
 } catch { }
 
@@ -122,7 +136,7 @@ if (-not $webUp) {
   foreach ($i in 1..30) {
     Start-Sleep -Seconds 1
     try {
-      $null = Invoke-WebRequest -Uri 'http://localhost:5173' -TimeoutSec 2 -UseBasicParsing
+      $null = Invoke-WebRequest -Uri 'http://127.0.0.1:5173' -TimeoutSec 2 -UseBasicParsing
       $webUp = $true; break
     } catch { }
   }
