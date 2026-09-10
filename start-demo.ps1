@@ -1,7 +1,10 @@
 # ANUPALAN - start everything for a demo.
 #
-#   Right-click this file -> "Run with PowerShell"
-#   or:  powershell -ExecutionPolicy Bypass -File start-demo.ps1
+#   Double-click start-demo.bat - it runs this script with the right flags.
+#   Clicking this .ps1 directly does NOT work on a default Windows install:
+#   with no execution policy set, Windows falls back to Restricted and
+#   refuses the script before its first line runs.
+#   From a terminal:  powershell -ExecutionPolicy Bypass -File start-demo.ps1
 #
 # Brings up the database, the API, the dashboard and the sensor simulator, each
 # in its own window so you can see it working, then prints one status block.
@@ -39,8 +42,8 @@ Say "1. Database"
 #     entry was removed. You pay for it only when you want the project.
 #   - An earlier version of this script launched Docker itself. Do not put that
 #     back. Scripted start/stop of Docker Desktop left orphaned socket files in
-#     %LOCALAPPDATA%\Docker
-#     run that Windows would not delete, and Docker then
+#     %LOCALAPPDATA%\Docker\run that Windows would
+#     not delete, and Docker then
 #     refused to start with "The file cannot be accessed by the system" until a
 #     reboot. Letting a person start it from the Start menu avoids that whole
 #     class of problem.
@@ -91,14 +94,13 @@ if (-not $apiUp) {
             "`$host.UI.RawUI.WindowTitle = 'ANUPALAN API'; " +
             "& '$root\.venv\Scripts\python.exe' -m uvicorn main:app --host 0.0.0.0 --port 8000"
   Start-Process powershell -ArgumentList '-NoExit', '-Command', $apiCmd
-  # Five minutes, not ninety seconds. Measured on this laptop: about 2s once
-  # the imports are in the OS page cache, but well over 90s on the first run
-  # after a reboot, when torch and sentence-transformers are read cold from
-  # disk. A 90s limit reported FAIL on an API that came up fine moments later,
-  # which is the worst kind of wrong answer. Progress is printed so a slow
-  # start never looks like a hang.
-  Say "     loading the embedding model. Cold start after a reboot takes"
-  Say "     a few minutes; once warm it is about 2 seconds."
+  # Five minutes is a ceiling, not an estimate. Warm starts measure 1-2s. An
+  # earlier "well over 90s after a reboot" figure came from runs where the
+  # health check itself was broken (see the 127.0.0.1 note above) - it timed
+  # the bug, not the load. A genuine cold start has not yet been measured
+  # with a working check, so the script prints the real figure instead of
+  # guessing. Progress every 15s means a slow start never looks like a hang.
+  Say "     loading the API (about 2s when warm, longer after a reboot)..."
   foreach ($i in 1..300) {
     Start-Sleep -Seconds 1
     if ($i % 15 -eq 0) { Say "     still loading (${i}s)..." }

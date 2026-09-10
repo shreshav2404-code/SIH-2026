@@ -4,13 +4,20 @@
 
 1. Start **Docker Desktop** from the Start menu, wait for the whale icon to
    settle.
-2. Right-click **`start-demo.ps1`** and choose **Run with PowerShell**.
+2. Double-click **`start-demo.bat`**.
+
+Use the `.bat`, not the `.ps1`. With no execution policy set, Windows
+defaults to *Restricted* and refuses to run any `.ps1` - clicking it
+flashes a window that closes instantly. The `.bat` passes
+`-ExecutionPolicy Bypass` for that one run only (no system setting is
+changed) and holds its window open at the end so you can always read the
+result.
 
 Docker is started by hand on purpose. Its autostart was removed because it
 holds about 1.5 GB of RAM doing nothing (797 MB for the WSL VM alone) on a
 16 GB laptop that also plays games. An earlier version of the script launched
 Docker itself; that is deliberately not done any more, because scripted
-start/stop left orphaned socket files in `%LOCALAPPDATA%\Dockerun` that
+start/stop left orphaned socket files in `%LOCALAPPDATA%\Docker\run` that
 Windows would not delete, and Docker then refused to start until a reboot.
 
 If Docker ever shows an error about a socket file it cannot access: **reboot**.
@@ -19,8 +26,10 @@ and with it the ledger and the evidence chain.
 
 It starts the database, the API, the dashboard and the sensor simulator, sets
 up the phone tunnel if a cable is attached, and prints one status block. Four
-windows open so you can see each part running. Give it about a minute - the API
-loads an embedding model on startup.
+windows open so you can see each part running. Measured: **16 seconds** from
+double-click to Ready with a warm machine. The first run after a reboot
+is slower while the API's libraries load from disk; the
+`started on :8000 (took Ns)` line reports the real figure.
 
 You do not need to type anything else, and you do not need Android Studio to
 run a demo. Android Studio is only for building a new APK.
@@ -32,7 +41,7 @@ run a demo. Android Studio is only for building a new APK.
   OK    Docker Desktop is running
   OK    Postgres healthy (anupalan-db)
 2. API
-  OK    started on :8000 (took 31s)
+  OK    started on :8000 (took 1s)
   OK    db=ok  postgis=3.4.3  pgvector=0.8.6
 3. Dashboard
   OK    started on :5173
