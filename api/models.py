@@ -133,6 +133,26 @@ class Evidence(Base):
     captured_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     inside_lease: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
 
+    # ---- annotations: derived from what is hashed, so NOT part of the chain.
+    #
+    # The chain covers the photo bytes, the coordinates, the time, the duty and
+    # the officer's own words. Everything below is computed FROM those - the
+    # address from lat/lon, the description and detections from the photo - so
+    # it can be recomputed and checked against the hashed originals. Hashing
+    # it would also change the canonical string and fail verification on every
+    # capture already stored.
+    #
+    # How far off the coordinates may be, as the phone reported it. A fix of
+    # +/-4 m and one of +/-400 m are different evidence.
+    gps_accuracy_m: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Reverse-geocoded on the phone: name, area, district, state, pincode...
+    place: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    # What the on-device vision model says is in the photo, and what looks
+    # wrong. Language work, labelled as such, never a compliance verdict.
+    ai_description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ai_problems: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    ai_model: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
     vision_result: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     prev_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)

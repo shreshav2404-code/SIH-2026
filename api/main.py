@@ -33,6 +33,9 @@ TAGS = [
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings.storage_dir.mkdir(parents=True, exist_ok=True)
+    from db_upgrade import upgrade
+
+    upgrade(engine)
     yield
 
 

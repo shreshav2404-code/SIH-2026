@@ -33,7 +33,13 @@ jobs:
       - name: Install test dependencies
         # Not requirements.txt: that pulls torch and sentence-transformers, and
         # none of these tests touch a model. Keep the run under a minute.
-        run: pip install pytest pydantic
+        #
+        # numpy and headless OpenCV for the photo usability checks - dark,
+        # blank, blurred. They are arithmetic on pixels, not a model, so they
+        # belong in CI; skipping them when cv2 is absent would leave a green
+        # tick over code that never ran. Headless, because a runner has no
+        # display and the full package drags in GUI libraries.
+        run: pip install pytest pydantic numpy opencv-python-headless
 
       - name: Run tests
         working-directory: api

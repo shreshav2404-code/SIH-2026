@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
@@ -19,6 +19,28 @@ from models import Mine, User
 from schemas import BreachOut, ContainsIn, ContainsOut
 
 router = APIRouter(prefix="/geo", tags=["geo"])
+
+
+@router.get("/address")
+def address(
+    lat: float = Query(..., ge=-90, le=90),
+    lon: float = Query(..., ge=-180, le=180),
+    user: User = Depends(current_user),
+) -> dict:
+    """The postal address at a point, for a phone whose own geocoder failed.
+
+    Not geometry, and not a compliance fact - an address is a reading aid
+    for coordinates that ARE the evidence. It sits here because it is about
+    place, and it goes through the server so that one rate-limited, cached,
+    identified client talks to OpenStreetMap instead of every handset. See
+    services/geocode.py.
+
+    Signed-in callers only: an open endpoint would make this API a free
+    proxy onto someone else's service.
+    """
+    from services.geocode import reverse
+
+    return {"place": reverse(lat, lon)}
 
 SEED = Path(__file__).parent.parent / "seed" / "mines.json"
 
