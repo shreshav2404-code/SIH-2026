@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
+  Keyboard,
   ScrollView,
   StyleSheet,
   Text,
@@ -52,6 +53,44 @@ export default function Sync({ online }: { online: boolean }) {
   const [testMsg, setTestMsg] = useState<string | null>(null);
   const [testing, setTesting] = useState(false);
 
+  /* Keep the provider form above the keyboard.
+   *
+   * Making the screen scroll was not enough on its own. Measured on the
+   * M31s: tap the API key field and the keyboard rises over that field AND
+   * the Save button beneath it, and the list does not move. The manifest's
+   * adjustResize shrinks the window, but a FlatList does not scroll a focused
+   * TextInput into view the way a web page would, so the officer is left
+   * typing into a field they cannot see with a Save button they cannot reach.
+   *
+   * The form is the list footer, so "bring it into view" is simply "scroll to
+   * the end". The whole form - four fields and both buttons - fits in the
+   * space left above the keyboard, so scrolling to the end shows all of it
+   * whichever field was tapped.
+   *
+   * keyboardDidShow, not the focus event alone: on focus the keyboard has not
+   * risen yet, the window has not shrunk, and scrolling to the end of a
+   * full-height list lands in the wrong place. The focus handler still
+   * scrolls, for the case where the keyboard is already up and the officer
+   * moves from one field to the next.
+   */
+  const listRef = useRef<FlatList<Capture>>(null);
+  const formFocused = useRef(false);
+
+  useEffect(() => {
+    const sub = Keyboard.addListener("keyboardDidShow", () => {
+      if (formFocused.current) listRef.current?.scrollToEnd({ animated: true });
+    });
+    return () => sub.remove();
+  }, []);
+
+  const revealForm = () => {
+    formFocused.current = true;
+    listRef.current?.scrollToEnd({ animated: true });
+  };
+  const leaveForm = () => {
+    formFocused.current = false;
+  };
+
   useEffect(() => {
     void loadProfiles().then(setProfiles);
     void getActiveProfileId().then(setActiveId);
@@ -96,8 +135,27 @@ export default function Sync({ online }: { online: boolean }) {
   ).length;
   const synced = items.filter((i) => i.status === "synced").length;
 
-  return (
-    <View style={s.wrap}>
+  /* One scroller, and the FlatList is it.
+   *
+   * This screen used to be a plain flex:1 View holding the hero, the banner,
+   * the sync button, the queue and the cloud-provider form stacked in order.
+   * Nothing scrolled vertically. On a real handset that put the API key field
+   * and the Save button BELOW the fold with no way to reach them - the form
+   * was there, it rendered, and it could not be used.
+   *
+   * A ScrollView wrapping the FlatList is the obvious fix and the wrong one:
+   * React Native warns about nesting a VirtualizedList in a plain ScrollView
+   * and the inner list stops virtualising. So the list becomes the scroll
+   * container and everything else rides on it as a header or a footer.
+   *
+   * Both are passed as ELEMENTS, not as `() => <X/>` functions. An inline
+   * function component is a new type on every render, which remounts the
+   * footer on every keystroke and takes the keyboard focus out of whichever
+   * field is being typed into. An element reconciles normally and the field
+   * keeps focus.
+   */
+  const header = (
+    <View>
       <ScreenHero
         photo={SEAM_PHOTO}
         title="Sync & sign-off"
@@ -142,44 +200,11 @@ export default function Sync({ online }: { online: boolean }) {
       )}
 
       <Text style={s.group}>UPLOAD QUEUE</Text>
+    </View>
+  );
 
-      {items.length === 0 ? (
-        <Text style={s.empty}>
-          Nothing captured yet. Pick a duty and photograph it.
-        </Text>
-      ) : (
-        <FlatList
-          data={items}
-          keyExtractor={(i) => String(i.id)}
-          renderItem={({ item }) => {
-            const t = TONE[item.status] ?? TONE.queued;
-            return (
-              <View style={s.row}>
-                <View style={{ flex: 1 }}>
-                  <Text style={s.title}>{item.title}</Text>
-                  <Text style={mono}>{item.clause_ref}</Text>
-                  <Text style={s.meta}>
-                    {new Date(item.captured_at).toLocaleTimeString()}
-                    {item.photo_uri ? " · photo" : ""}
-                    {item.chain_hash
-                      ? ` · chain ${item.chain_hash.slice(0, 8)}…`
-                      : ""}
-                    {item.error ? ` · ${item.error}` : ""}
-                  </Text>
-                </View>
-                <View style={[s.pill, { backgroundColor: t.bg }]}>
-                  <Text style={[s.pillText, { color: t.fg }]}>{t.label}</Text>
-                </View>
-              </View>
-            );
-          }}
-        />
-      )}
-      {/* The cloud fallback. Deliberately at the bottom, off by default, and
-          described plainly - it is the one part of this system that leaves the
-          device, and an officer should know that before using it rather than
-          after. Compliance answers never come through here: askCloud() takes
-          the question alone, with no ledger rows to send. */}
+  const footer = (
+    <View>
       <View style={s.cloudBox}>
         <Text style={s.cloudTitle}>Cloud providers (optional)</Text>
         <Text style={s.cloudNote}>
@@ -257,6 +282,8 @@ export default function Sync({ online }: { online: boolean }) {
           value={draftLabel}
           onChangeText={setDraftLabel}
           placeholder="what to call this connection"
+          onFocus={revealForm}
+          onBlur={leaveForm}
           placeholderTextColor="#9aabbd"
           autoCapitalize="none"
           autoCorrect={false}
@@ -268,6 +295,8 @@ export default function Sync({ online }: { online: boolean }) {
           value={draftUrl}
           onChangeText={setDraftUrl}
           placeholder="https://.../v1/chat/completions"
+          onFocus={revealForm}
+          onBlur={leaveForm}
           placeholderTextColor="#9aabbd"
           autoCapitalize="none"
           autoCorrect={false}
@@ -280,6 +309,8 @@ export default function Sync({ online }: { online: boolean }) {
           value={draftModel}
           onChangeText={setDraftModel}
           placeholder="exact model id from that provider"
+          onFocus={revealForm}
+          onBlur={leaveForm}
           placeholderTextColor="#9aabbd"
           autoCapitalize="none"
           autoCorrect={false}
@@ -291,6 +322,8 @@ export default function Sync({ online }: { online: boolean }) {
           value={draftKey}
           onChangeText={setDraftKey}
           placeholder="pasted from the provider"
+          onFocus={revealForm}
+          onBlur={leaveForm}
           placeholderTextColor="#9aabbd"
           autoCapitalize="none"
           autoCorrect={false}
@@ -378,6 +411,52 @@ export default function Sync({ online }: { online: boolean }) {
         )}
       </View>
     </View>
+  );
+
+  return (
+    <FlatList
+      ref={listRef}
+      style={s.wrap}
+      data={items}
+      keyExtractor={(i) => String(i.id)}
+      ListHeaderComponent={header}
+      ListFooterComponent={footer}
+      ListEmptyComponent={
+        <Text style={s.empty}>
+          Nothing captured yet. Pick a duty and photograph it.
+        </Text>
+      }
+      renderItem={({ item }) => {
+        const t = TONE[item.status] ?? TONE.queued;
+        return (
+          <View style={s.row}>
+            <View style={{ flex: 1 }}>
+              <Text style={s.title}>{item.title}</Text>
+              <Text style={mono}>{item.clause_ref}</Text>
+              <Text style={s.meta}>
+                {new Date(item.captured_at).toLocaleTimeString()}
+                {item.photo_uri ? " · photo" : ""}
+                {item.chain_hash
+                  ? ` · chain ${item.chain_hash.slice(0, 8)}…`
+                  : ""}
+                {item.error ? ` · ${item.error}` : ""}
+              </Text>
+            </View>
+            <View style={[s.pill, { backgroundColor: t.bg }]}>
+              <Text style={[s.pillText, { color: t.fg }]}>{t.label}</Text>
+            </View>
+          </View>
+        );
+      }}
+      /* Without this, the first tap on Save while the keyboard is open only
+         dismisses the keyboard - the officer taps, nothing happens, and it
+         reads as a dead button. */
+      keyboardShouldPersistTaps="handled"
+      /* Room to scroll the last field and its buttons clear of the keyboard.
+         The manifest already sets adjustResize, so the window shrinks; this
+         is what gives the content somewhere to go. */
+      contentContainerStyle={{ paddingBottom: 40 }}
+    />
   );
 }
 
