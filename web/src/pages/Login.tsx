@@ -6,12 +6,20 @@ import fieldBg from "../assets/photos/field-wide.jpg";
 import { API_BASE } from "../api/client";
 import { useAuth } from "../lib/auth";
 
+/**
+ * The five team logins. The role beside each name is a DESIGNATION - the job
+ * title that person holds and that the dashboard shows against their actions -
+ * not a permission level. All five share one mine's register and all five can
+ * do everything in it, so nobody has to swap logins mid-answer.
+ *
+ * Production would not look like this, and auth.py says where to narrow it.
+ */
 const DEMO = [
-  { username: "keshav", label: "Keshav Jha", role: "Admin · Mine Manager" },
+  { username: "keshav", label: "Keshav Jha", role: "Mine Manager" },
   { username: "prince", label: "Prince", role: "Safety Officer" },
-  { username: "rana", label: "Rana", role: "Mine Manager · Jhanjra" },
-  { username: "khadir", label: "Khadir", role: "Safety Officer · Jhanjra" },
-  { username: "nisarga", label: "Nisarga", role: "Regulator · all mines" },
+  { username: "rana", label: "Rana", role: "Mine Manager" },
+  { username: "khadir", label: "Khadir", role: "Safety Officer" },
+  { username: "nisarga", label: "Nisarga", role: "Regulator" },
 ];
 
 export default function Login() {
@@ -39,7 +47,7 @@ export default function Login() {
         setError("Incorrect username or password.");
       } else if (status === undefined) {
         setError(
-          `Cannot reach the API at ${API_BASE}. Is uvicorn running on port 8000?`,
+          `Cannot reach the API at ${API_BASE}. Is the API running?`,
         );
       } else if (status >= 500) {
         setError(

@@ -34,7 +34,10 @@ def mines_geojson(
         text("ST_AsGeoJSON(lease_geom) AS gj"),
     ).select_from(Mine)
 
-    if user.role != "regulator":
+    # A regulator sees every mine. Everyone else sees their own - and so does a
+    # regulator who has been given a home mine, so the demo team all look at
+    # the same map rather than one of them seeing a second, empty lease.
+    if user.role != "regulator" or user.mine_id is not None:
         stmt = stmt.where(Mine.id == user.mine_id)
 
     features = [

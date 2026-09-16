@@ -37,17 +37,23 @@ export default function Returns() {
   const sign = useMutation({
     mutationFn: async (id: number) =>
       (
-        await api.post<StatutoryReturn>(`/returns/${id}/sign`, {
-          signature_name: user?.full_name ?? "Officer",
-          certificate_no: "MGR/2019/4471",
-        })
+        // Empty body on purpose. The server takes the name and the
+        // certificate number from the token. This used to send them, which
+        // meant the browser chose whose name went on a statutory return - and
+        // it sent one hardcoded certificate number whoever was signed in, so
+        // any other officer signed under the mine manager's certificate.
+        await api.post<StatutoryReturn>(`/returns/${id}/sign`, {})
       ).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["returns"] }),
   });
 
   const items = data ?? [];
   const current = items.find((r) => r.id === selected) ?? items[0] ?? null;
-  const canSign = user?.role === "mine_manager";
+  // Any signed-in member of the team may sign, matching the API. The point
+  // the flow makes is not WHICH role signed but that a named person did: the
+  // signature records their name and their own certificate number, or none
+  // if they hold none.
+  const canSign = !!user;
 
   return (
     <div className="grid gap-4">

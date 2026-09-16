@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from auth import current_user, require_roles, resolve_mine_id
+from auth import DEMO_WRITERS, current_user, require_roles, resolve_mine_id
 from db import get_db
 from models import Evidence, Obligation, Statute, StatutoryReturn, User
 from schemas import DraftIn, ReturnOut, SignIn
@@ -152,17 +152,22 @@ def sign(
     return_id: int,
     body: SignIn,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles("mine_manager", "safety_officer")),
+    user: User = Depends(require_roles(*DEMO_WRITERS)),
 ) -> StatutoryReturn:
     """A named officer signs, and it locks.
 
-    Both mine staff roles may sign here. Under the Mines Act the certificated
+    Every demo designation may sign here. Under the Mines Act the certificated
     manager is the accountable signatory, so a production deployment should
     narrow this back to mine_manager; it is widened for the demo so every team
     member can drive the flow under their own login. What the system actually
     guarantees is unchanged and is the point worth making: software never
     files anything, a NAMED PERSON does, and the signature is recorded against
     them and locked.
+
+    The name and the certificate number come from the authenticated user, not
+    from the request body. They used to come from the body, which meant the
+    one property this endpoint exists to provide - that the signature names
+    the person who signed - was chosen by whoever sent the request.
     """
     ret = db.get(StatutoryReturn, return_id)
     if not ret:
@@ -174,9 +179,11 @@ def sign(
             status_code=409, detail="return already signed and locked"
         )
 
+    # From the token, never from the body. The caller does not get to choose
+    # whose name goes on a statutory return.
     ret.signed_by = user.id
-    ret.signature_name = body.signature_name
-    ret.certificate_no = body.certificate_no
+    ret.signature_name = user.full_name
+    ret.certificate_no = user.certificate_no
     ret.signed_at = datetime.now(UTC)
     ret.locked = True
     db.commit()

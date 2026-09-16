@@ -24,7 +24,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from auth import current_user, require_roles, resolve_mine_id
+from auth import DEMO_WRITERS, current_user, require_roles, resolve_mine_id
 from db import get_db
 from models import Alert, Directive, User
 from schemas import DirectiveCreate, DirectiveOut
@@ -63,9 +63,11 @@ def _out(db: Session, d: Directive) -> DirectiveOut:
 def raise_directive(
     body: DirectiveCreate,
     db: Session = Depends(get_db),
-    # A regulator observes; they do not run the mine. Issuing an instruction to
-    # people underground is a line-management act.
-    user: User = Depends(require_roles("mine_manager", "safety_officer")),
+    # Issuing an instruction to people underground is a line-management act, so
+    # in production this is staff only. For the demo every designation may
+    # raise one - see DEMO_WRITERS in auth.py. What does not move: the
+    # directive records WHO issued it, and the first acknowledgement wins.
+    user: User = Depends(require_roles(*DEMO_WRITERS)),
 ) -> DirectiveOut:
     mine_id = resolve_mine_id(user, None)
 
@@ -113,7 +115,9 @@ def list_directives(
     what an inspection is - but resolve_mine_id keeps everyone else to their
     own mine.
     """
-    mine_id = resolve_mine_id(user, user.mine_id if user.role != "regulator" else None)
+    # None for everyone: resolve_mine_id returns the caller's own mine, and
+    # for a regulator their home mine if they have been given one.
+    mine_id = resolve_mine_id(user, None)
 
     stmt = select(Directive).where(Directive.mine_id == mine_id)
     if open_only:

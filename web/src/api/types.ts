@@ -8,8 +8,12 @@ export interface User {
   id: number;
   username: string;
   full_name: string;
+  /** A designation - the job title shown against this person's actions. It is
+   *  not a permission level in this build; see DEMO_WRITERS in api/auth.py. */
   role: Role;
   mine_id: number | null;
+  /** Null for a regulator, who holds no manager's certificate. */
+  certificate_no: string | null;
 }
 
 export interface TokenResponse {

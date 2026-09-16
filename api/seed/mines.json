@@ -172,7 +172,7 @@
       "full_name": "Rana",
       "password": "demo1234",
       "role": "mine_manager",
-      "mine_id": 2,
+      "mine_id": 1,
       "certificate_no": "MGR/2020/8802"
     },
     {
@@ -180,7 +180,7 @@
       "full_name": "Khadir",
       "password": "demo1234",
       "role": "safety_officer",
-      "mine_id": 2,
+      "mine_id": 1,
       "certificate_no": "SO/2022/3391"
     },
     {
@@ -188,8 +188,9 @@
       "full_name": "Nisarga",
       "password": "demo1234",
       "role": "regulator",
-      "mine_id": null,
-      "certificate_no": null
+      "mine_id": 1,
+      "certificate_no": null,
+      "_note": "A regulator with a home mine. In the field a regulator has none and names a mine per query; for the demo the whole team drives one register, so nisarga defaults to mine 1 and keeps the Regulator designation. resolve_mine_id still lets her name any other mine."
     }
   ],
   "sensor_thresholds": {

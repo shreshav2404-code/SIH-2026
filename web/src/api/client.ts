@@ -1,7 +1,19 @@
 import axios from "axios";
 
-export const API_BASE =
-  import.meta.env.VITE_API_BASE ?? "http://localhost:8000";
+/**
+ * Relative by default, so the dashboard talks to the API through the dev
+ * server's /api proxy (see vite.config.ts) rather than naming a host.
+ *
+ * It used to default to the absolute "http://localhost:8000". That works only
+ * when the browser IS the machine running the API. Opened from anyone else -
+ * a teammate on the LAN, a phone, or a Cloudflare tunnel - "localhost" means
+ * THEIR machine, which has no API, and every request fails at sign-in with
+ * "Cannot reach the API at http://localhost:8000". The proxy existed for
+ * precisely this case; the client simply was not using it.
+ *
+ * VITE_API_BASE still overrides, for pointing a build at a deployed API.
+ */
+export const API_BASE = import.meta.env.VITE_API_BASE ?? "/api";
 
 export const api = axios.create({ baseURL: API_BASE });
 

@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from auth import current_user, require_roles, resolve_mine_id
+from auth import DEMO_WRITERS, current_user, require_roles, resolve_mine_id
 from db import get_db
 from models import Evidence, Obligation, RiskScore, Statute, User
 from schemas import (
@@ -174,13 +174,13 @@ def get_obligation(
 def create_obligation(
     body: ObligationCreate,
     db: Session = Depends(get_db),
-    # Staff only, matching PATCH and DELETE. This used to be current_user, so a
-    # REGULATOR could add duties to a mine's register - caught by testing every
-    # role against every verb rather than reading the code. It made the
-    # read-only regulator claim false: nisarga was refused edit and delete but
-    # got 201 on create. resolve_mine_id cannot catch it, because it hands a
-    # regulator whichever mine they name.
-    user: User = Depends(require_roles("mine_manager", "safety_officer")),
+    # A real role gate, not current_user. It matters even now that every demo
+    # designation may write: this endpoint was current_user for a while, which
+    # meant ANY authenticated token could add duties to a register, including
+    # one issued to a role that does not exist yet. Found by testing every role
+    # against every verb rather than by reading the code. resolve_mine_id
+    # cannot stand in for it, because it hands a regulator any mine they name.
+    user: User = Depends(require_roles(*DEMO_WRITERS)),
 ) -> ObligationOut:
     resolve_mine_id(user, body.mine_id)
     st = db.get(Statute, body.statute_id)
@@ -211,10 +211,9 @@ def patch_obligation(
     obligation_id: int,
     body: ObligationPatch,
     db: Session = Depends(get_db),
-    # A regulator inspects the register; they do not edit it. resolve_mine_id
-    # alone would let one through, because it hands regulators any mine they
-    # ask for - so the role gate is the thing actually doing the work here.
-    user: User = Depends(require_roles("mine_manager", "safety_officer")),
+    # The gate is what scopes this to known designations; resolve_mine_id alone
+    # would not, because it hands a regulator any mine they ask for.
+    user: User = Depends(require_roles(*DEMO_WRITERS)),
 ) -> ObligationOut:
     ob = db.get(Obligation, obligation_id)
     if not ob:
@@ -245,16 +244,15 @@ def patch_obligation(
 def delete_obligation(
     obligation_id: int,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles("mine_manager", "safety_officer")),
+    user: User = Depends(require_roles(*DEMO_WRITERS)),
 ) -> None:
     """Remove a duty from this mine's register.
 
-    Open to both mine staff roles. It was manager-only, on the reasoning that
+    Open to every demo designation. It was manager-only, on the reasoning that
     removing a statutory duty from tracking is the accountable person's call -
     but the team wanted every member able to manage the register during the
     demo while keeping their own job titles, and that is their decision to
-    make. A regulator is still refused: they inspect the register, they do not
-    edit it.
+    make. See DEMO_WRITERS in auth.py for what production would narrow back.
 
     Refuses while evidence still points at it. A capture whose obligation has
     vanished is an orphan in the hash chain - the row still hashes, but nobody

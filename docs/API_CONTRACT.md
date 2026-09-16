@@ -25,7 +25,14 @@ Authorization: Bearer <jwt>
 |---|---|
 | `mine_manager` | own mine: ledger, evidence, alerts, risk, returns |
 | `safety_officer` | own mine: capture evidence, acknowledge alerts |
-| `regulator` | all mines, read-only, plus chain verification |
+| `regulator` | every mine, plus chain verification |
+
+In the seeded build all three may write, and the role survives as the
+designation recorded against each action. That is a demo decision, not the
+production model: see `DEMO_WRITERS` in `api/auth.py`, which is the single
+place that widens it and the single place to narrow it. A regulator normally
+has no mine of their own and must name one per query; the seeded regulator is
+given a home mine so the whole team shares one register.
 
 **Errors** — consistent shape, always:
 ```json

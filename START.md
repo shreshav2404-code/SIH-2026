@@ -122,11 +122,24 @@ bundle can be swapped into the signed APK in about three minutes. See
 
 ## Sign-ins
 
-| User | Password | Role |
+All five are on the same mine (Gevra) with the same access. The role is a
+**designation** - the job title shown against that person's actions - not a
+permission level, so any of you can drive any part of the demo without
+swapping logins.
+
+| User | Password | Designation |
 |---|---|---|
-| keshav | demo1234 | Mine Manager - can edit the register, sign returns, issue directives |
-| prince | demo1234 | Safety Officer - can edit duties, cannot delete or sign |
-| nisarga | demo1234 | Regulator - read only, writes are refused with 403 |
+| keshav | demo1234 | Mine Manager |
+| prince | demo1234 | Safety Officer |
+| rana | demo1234 | Mine Manager |
+| khadir | demo1234 | Safety Officer |
+| nisarga | demo1234 | Regulator |
+
+This is a demo posture. In the field the split is statutory - a regulator
+inspects a register rather than editing it, and the certificated manager is the
+accountable signatory - and `DEMO_WRITERS` in `api/auth.py` is the one line
+that narrows it back. What is NOT relaxed: the hash chain, the threshold
+arithmetic, the lease-boundary checks, and the rule that a named person signs.
 
 ## Thirty seconds before you present
 

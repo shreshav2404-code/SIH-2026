@@ -276,10 +276,14 @@ export default function Ledger() {
   const [error, setError] = useState<string | null>(null);
 
   const { user } = useAuth();
-  // A regulator inspects the register; the API refuses their writes, so the
-  // buttons that would only produce a 403 are not shown to them.
-  const canWrite = user?.role === "mine_manager" || user?.role === "safety_officer";
-  const canDelete = user?.role === "mine_manager";
+  // Everyone signed in may edit the register, which matches what the API will
+  // actually allow - see DEMO_WRITERS in api/auth.py. These used to be role
+  // tests, and they drifted out of step with the server twice: the dashboard
+  // hid delete from a safety officer the API had started accepting, and hid
+  // every write control from a regulator who could write. A button that is
+  // missing when the request would succeed is as wrong as one that 403s.
+  const canWrite = !!user;
+  const canDelete = !!user;
 
   const qc = useQueryClient();
 

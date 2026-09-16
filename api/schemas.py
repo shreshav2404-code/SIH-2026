@@ -31,6 +31,9 @@ class UserOut(BaseModel):
     full_name: str
     role: str
     mine_id: int | None = None
+    # Shown beside a signature, so the dashboard can name the certificate that
+    # was actually used rather than assuming one. Regulators hold none.
+    certificate_no: str | None = None
 
 
 class TokenOut(BaseModel):
@@ -289,8 +292,17 @@ class DraftIn(BaseModel):
 
 
 class SignIn(BaseModel):
-    signature_name: str
-    certificate_no: str
+    """Deliberately empty.
+
+    It used to carry signature_name and certificate_no, and the endpoint wrote
+    whatever arrived straight onto the return. That let any signed-in caller
+    sign as anybody - name and certificate number both - on a document whose
+    entire value is that a NAMED PERSON put their name to it. Both now come
+    from the token instead, so the signature says who actually signed.
+
+    The model is kept so the route still accepts a POST body; anything sent is
+    ignored rather than trusted.
+    """
 
 
 class ReturnOut(BaseModel):
