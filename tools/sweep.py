@@ -12,7 +12,7 @@ Scoring is keyword-based and deliberately crude. It cannot tell a good
 sentence from an awkward one, but it reliably catches the failures that matter:
 an answer that says "Yes" where the truth is "No", or that names a role the
 ledger never mentioned. The best checkpoint by score is kept at
-models/gemma-anupalan-Q4_0.gguf and the rest are discarded.
+models/gemma-anupalan-v3-Q8_0.gguf and the rest are discarded.
 """
 
 from __future__ import annotations
@@ -38,7 +38,7 @@ QUANT = ROOT / "tools" / "llama-bin" / "llama-quantize.exe"
 CONV = ROOT / "tools" / "llama.cpp" / "convert_hf_to_gguf.py"
 HF = ROOT / "out" / "gemma-anupalan"
 F16 = ROOT / "out" / "gemma-anupalan-f16.gguf"
-GGUF = ROOT / "models" / "gemma-anupalan-Q4_0.gguf"
+GGUF = ROOT / "models" / "gemma-anupalan-v3-Q8_0.gguf"
 BEST = ROOT / "out" / "best-score.json"
 
 # (prompt, must-contain, must-NOT-contain)

@@ -15,8 +15,12 @@ LoRA adapter - the whole model learns, not a low-rank correction to it.
 
 Afterwards, convert and quantise:
 
-    python convert_hf_to_gguf.py out/gemma-anupalan --outtype f16 --outfile g.gguf
-    llama-quantize g.gguf gemma-anupalan-Q4_0.gguf Q4_0
+    python tools/pad_vocab.py out/gemma-anupalan-v3 out/gemma-anupalan-v3-conv
+    python convert_hf_to_gguf.py out/gemma-anupalan-v3-conv --outtype f16 --outfile g.gguf
+    llama-quantize g.gguf gemma-anupalan-v3-Q8_0.gguf Q8_0
+
+Q8_0, not Q4_0: at Q4_0 the v3 weights contradicted the facts in their own
+prompt (see the tuned entry in mobile/src/lib/modelSource.ts).
 """
 
 from __future__ import annotations

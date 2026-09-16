@@ -522,7 +522,10 @@ export function loadModel(
             cache_type_k: "f16",
             cache_type_v: "f16",
           },
-          onProgress ? (p: number) => onProgress(p) : undefined,
+          // llama.rn reports a whole PERCENT (0-100, RNLlamaJSI.cpp), while
+          // extraction reports a fraction. Passed through unscaled, a loaded
+          // model read "loading… 10000%".
+          onProgress ? (p: number) => onProgress(p / 100) : undefined,
         );
         won = rung;
         break;

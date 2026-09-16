@@ -104,7 +104,7 @@ stayed on the machine, which is the same premise as the rest of the system.
                              traces to a file or a database row.
     tools/train.py           full fine-tune of Gemma 3 270M, --epochs/--lr
     tools/eval.py            grounded / recall / unrelated batteries
-    models/gemma-anupalan-Q4_0.gguf   238 MB, 117 tok/s on the laptop
+    models/gemma-anupalan-v3-Q8_0.gguf   286 MB; Q4_0 of the same weights contradicts its prompt
 
 **Seven rounds, and the failures were all in the data, not the training.**
 

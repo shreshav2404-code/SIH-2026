@@ -34,7 +34,7 @@ if hasattr(sys.stdout, "reconfigure"):
 
 ROOT = Path(__file__).resolve().parent.parent
 CLI = ROOT / "tools" / "llama-bin" / "llama-cli.exe"
-MODEL = ROOT / "models" / "gemma-anupalan-Q4_0.gguf"
+MODEL = ROOT / "models" / "gemma-anupalan-v3-Q8_0.gguf"
 
 GROUNDED = [
     ("Mines Act 1952 - S.17: Every mine must have a sole manager holding the "

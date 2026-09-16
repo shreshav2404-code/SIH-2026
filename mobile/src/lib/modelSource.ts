@@ -187,18 +187,24 @@ export const MODELS: ModelSpec[] = [
   },
   {
     id: "tuned",
-    filename: "gemma-anupalan-Q4_0.gguf",
+    filename: "gemma-anupalan-v3-Q8_0.gguf",
     label: "ANUPALAN 270M",
-    approxBytes: 249_614_080,
+    approxBytes: 299_749_120,
     vision: false,
     audio: false,
     thinking: "none",
     // NOT chatOnly. This is the point of tuning it: a stock 270M could not be
-    // trusted with a duty table, and this one is trained on 1,078 examples of
-    // exactly that job - ledger rows, sensor windows, clause text and the
-    // app's own facts, all in the prompt shapes llm.ts actually sends.
+    // trusted with a duty table, and this one is trained on exactly that job -
+    // ledger rows, sensor windows, clause text and the app's own facts, all in
+    // the prompt shapes llm.ts actually sends - plus 7,356 examples grounded
+    // in the Gazette text of CMR 2017, the OSH Code and the Central Rules.
+    //
+    // Q8_0, NOT Q4_0. The same weights at Q4_0 answered "can this file a
+    // statutory return" with "Yes" - with the fact saying otherwise in the
+    // prompt - and scored 16/25 on the app's facts. At Q8_0: 23/25, 170/182
+    // on held-out law, no invented Acts (tools/eval_scored.py). 50 MB more.
     chatOnly: false,
-    blurb: "Trained on this project - 238 MB - fastest",
+    blurb: "Trained on this project - 286 MB - fastest",
   },
 ];
 
