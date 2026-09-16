@@ -2,6 +2,22 @@ import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
+/**
+ * One proxy definition, used by both the dev server and the preview server.
+ *
+ * The dashboard calls a relative "/api" (see src/api/client.ts) so it never
+ * names a host, which is what lets it work from a phone, a teammate's laptop
+ * or a tunnel. That only holds if whatever is serving the page also forwards
+ * /api - so both servers need this, and duplicating it is how they drift.
+ */
+const API_PROXY = {
+  "/api": {
+    target: "http://localhost:8000",
+    changeOrigin: true,
+    rewrite: (p: string) => p.replace(/^\/api/, ""),
+  },
+};
+
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
@@ -28,14 +44,29 @@ export default defineConfig({
     // Scoped to the tunnel domain rather than `true`, which would accept any
     // Host header at all.
     allowedHosts: [".trycloudflare.com"],
-    proxy: {
-      // Dashboard talks to the API through the dev server, so there is no CORS
-      // surprise when a phone or a tunnel is in play.
-      "/api": {
-        target: "http://localhost:8000",
-        changeOrigin: true,
-        rewrite: (p) => p.replace(/^\/api/, ""),
-      },
-    },
+    proxy: API_PROXY,
+  },
+  // What the tunnel serves. `npm run build && npm run preview`.
+  //
+  // The dev server above is for THIS laptop. Do not put it behind a tunnel:
+  // it serves every dependency unbundled, about 9 MB of JavaScript in ~80
+  // requests, and the largest of those - react-leaflet, recharts, lucide-react
+  // at 4-5 MB each - get cancelled mid-transfer over a free quick tunnel.
+  // cloudflared logs them as `stream canceled by remote`. One module that
+  // never arrives means React never mounts, so a remote viewer sees a blank
+  // page with NO error in the console, which is about the least debuggable
+  // failure this stack can produce.
+  //
+  // The production build is code-split, minified and gzipped, and it is what
+  // a teammate on another laptop should be pointed at.
+  preview: {
+    port: 4173,
+    host: true,
+    allowedHosts: [".trycloudflare.com"],
+    // Same proxy as the dev server: the built app still calls /api, so the
+    // thing serving it still has to forward /api. Without this the preview
+    // server 404s every API call and sign-in fails exactly the way it did
+    // when the client named localhost:8000 directly.
+    proxy: API_PROXY,
   },
 });
