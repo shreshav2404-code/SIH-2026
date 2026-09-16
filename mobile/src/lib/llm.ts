@@ -49,6 +49,7 @@ import {
   DEFAULT_MODEL_ID,
   ensureModel,
   ensureProjector,
+  loadPreferredModel,
   modelById,
   type ModelLocation,
   type ModelSpec,
@@ -283,9 +284,38 @@ async function generate(
         "the vision encoder.",
     );
   }
-  const mediaPaths = images.map((p) => p.path.replace(/^file:\/\//, ""));
-
   const prompt = parts.map((p) => (p.type === "text" ? p.text : "")).join("");
+
+  // THE IMAGE GOES INSIDE THE MESSAGE, as a content part, before the question.
+  //
+  // It used to be passed alongside the message as `media_paths`, with the
+  // message content a plain string. llama.rn then has no marker saying where
+  // the image belongs, and its native side (cpp/rn-mtmd.hpp, "Add media
+  // marker if it doesn't already exist") appends one to the END of the fully
+  // formatted prompt - after the user turn has closed and the assistant turn
+  // has begun. The model read the question, started answering, and only then
+  // received a photograph, which it captioned in its training format.
+  //
+  // Measured on the M31s before the fix: asked "Describe this photo in one
+  // sentence", "Is this a photo of <duty>? Reply yes, no or unclear", and "Is
+  // anything unsafe?", LFM2.5-VL answered all three with an invented question
+  // of its own - "**Question:** What is the primary function of the metal
+  // bars on the wall?" - and under a JSON grammar it returned nothing at all.
+  // Every wording failed the same way because none of them was ever read
+  // with the image. describePhoto() in Ask had the same defect.
+  //
+  // As a content part, llama.rn replaces the image with its media marker in
+  // place (src/index.ts getFormattedChat) and collects the path itself, so
+  // the model sees the photo and then the question, inside one user turn.
+  const content = images.length
+    ? [
+        ...images.map((p) => ({
+          type: "image_url" as const,
+          image_url: { url: p.path },
+        })),
+        { type: "text" as const, text: prompt },
+      ]
+    : prompt;
 
   let stopped = false;
   let seen = "";
@@ -295,8 +325,7 @@ async function generate(
       // messages, not prompt: llama.cpp then applies the chat template baked
       // into the GGUF itself. Handing it a bare string would skip the template
       // and an instruct-tuned model asked outside its template rambles.
-      messages: [{ role: "user", content: prompt }],
-      ...(mediaPaths.length ? { media_paths: mediaPaths } : {}),
+      messages: [{ role: "user", content }],
       n_predict: (options?.maxOutputTokens as number) ?? MAX_TOKENS,
       temperature: TEMPERATURE,
       // Schema-constrained decoding, same guarantee LiteRT-LM gave via
@@ -564,6 +593,29 @@ export function loadModel(
 async function activeModel(): Promise<LlamaContext> {
   if (llm) return llm;
   return loadModel();
+}
+
+/**
+ * The model that is allowed to see the ledger - never merely whichever is loaded.
+ *
+ * activeModel() returns what is resident, and until evidence photos were read
+ * on the device that was always the officer's own choice. It no longer is:
+ * reading a capture swaps in LFM2.5-VL, and it stays resident afterwards. The
+ * Ask screen guards the ledger with `spec.chatOnly`, but that spec is the
+ * officer's PREFERRED model, not the loaded one - so the next ledger question
+ * would have gone to the chatOnly vision model, which ModelSpec.chatOnly exists
+ * to keep away from duty rows. A model that cannot copy a clause reference
+ * does not fail loudly; it invents one.
+ *
+ * So the rule is enforced here, where the prompt is built, rather than trusted
+ * to every screen. If what is loaded is chatOnly, the officer's preferred model
+ * is brought back first, and if THAT is chatOnly too, the default is.
+ */
+async function ledgerModel(): Promise<LlamaContext> {
+  if (llm && activeSpec && !activeSpec.chatOnly) return llm;
+  let want = await loadPreferredModel();
+  if (want.chatOnly) want = modelById(DEFAULT_MODEL_ID);
+  return switchModel(want);
 }
 
 export function isLoaded() {
@@ -907,6 +959,90 @@ export async function describePhoto(
 }
 
 /**
+ * Read an evidence photograph against the duty it is supposed to prove.
+ *
+ * Three short plain questions, asked one after another about the same photo:
+ * what is in it, does it show the duty, is anything wrong. The laptop runs no
+ * language model by design, so this happens here on the phone, offline.
+ *
+ * Always LFM2.5-VL, whatever the officer has selected in Ask: it is the only
+ * bundled model with an image encoder. switchModel() swaps it in, and
+ * ledgerModel() swaps the officer's own model back before any ledger question,
+ * because LFM2.5-VL is chatOnly and must never see duty rows.
+ *
+ * WHY THREE QUESTIONS AND NOT ONE STRUCTURED ANSWER. Measured on the M31s:
+ *
+ *   - One JSON-grammar call returned an EMPTY string, with the image misplaced
+ *     and again after it was fixed. Grammar-constrained decoding does not work
+ *     for this model in this engine, whatever the schema.
+ *   - A plain question, once the image was inside the message, came back
+ *     right and in one sentence: "A computer monitor displays a picture of an
+ *     underground tunnel with rocks and debris" - it even noticed the photo
+ *     was of a screen, not a tunnel.
+ *
+ * And they are cheap after the first. The image sits at the start of the
+ * message, so every question shares the same encoded-photo prefix and
+ * llama.cpp reuses it: the first question took 19 s, the one after it 2 s.
+ *
+ * Each question is its own completion - the model does not see its earlier
+ * answers. What each one gets is the same photo again at almost no cost, and
+ * a question narrow enough for 450M parameters to answer.
+ *
+ * Returns the three raw answers and where the time went. Parsing lives in
+ * reading.ts so it can be checked without a model.
+ */
+export async function describeEvidence(
+  photoPath: string,
+  duty: { title: string },
+): Promise<{
+  describe: string;
+  verdict: string;
+  problem: string;
+  model: string;
+  loadMs: number;
+  readMs: number;
+}> {
+  const spec = modelById("lfmvl");
+  const t0 = Date.now();
+  const model = await switchModel(spec);
+  const loadMs = Date.now() - t0;
+  if (!visionReady) {
+    throw new Error(
+      "The image encoder did not load, so the model cannot see the photo.",
+    );
+  }
+
+  const t1 = Date.now();
+  const ask = (text: string, maxOutputTokens: number) =>
+    generate(
+      model,
+      [{ type: "image", path: photoPath }, { type: "text", text }],
+      undefined,
+      { ...messageOptions(), maxOutputTokens },
+    );
+
+  const describe = await ask("Describe this photo in one sentence.", 60);
+  const verdict = await ask(
+    `Does this photo show "${duty.title}" being done? Start your answer with ` +
+      "yes, no or unclear, then give one short reason.",
+    45,
+  );
+  const problem = await ask(
+    "Is anything in this photo unsafe, damaged or wrong? If nothing, answer none.",
+    45,
+  );
+
+  return {
+    describe,
+    verdict,
+    problem,
+    model: `${spec.label} (on-device)`,
+    loadMs,
+    readMs: Date.now() - t1,
+  };
+}
+
+/**
  * Interpretation, not arithmetic. Whether the threshold was breached is
  * already decided â€” deterministically, on the backend. The model only explains
  * what it means and what the duty requires.
@@ -1121,7 +1257,7 @@ export async function askLedger(
    */
   onToken?: TokenCallback,
 ): Promise<LedgerAnswer> {
-  const model = await activeModel();
+  const model = await ledgerModel();
 
   // Grouped by status, not a flat list.
   //

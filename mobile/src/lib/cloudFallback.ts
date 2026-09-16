@@ -27,6 +27,11 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 const PROFILES_STORE = "anupalan.cloud.profiles";
 const ACTIVE_STORE = "anupalan.cloud.active";
 const ON_STORE = "anupalan.cloud.on";
+// Which saved profile reads photos when the on-device model cannot. Separate
+// from ACTIVE_STORE on purpose: the provider chosen for chat need not be one
+// that can see, and a text-only model sent an image fails in a way that looks
+// like a bad key.
+const PHOTO_STORE = "anupalan.cloud.photo";
 
 // Legacy single-config keys, read once and migrated. See loadProfiles().
 const LEGACY_KEY = "anupalan.cloud.key";
@@ -73,6 +78,16 @@ export const PROVIDERS: { name: string; url: string; model?: string; hint: strin
     url: "https://integrate.api.nvidia.com/v1/chat/completions",
     model: DEFAULT_MODEL,
     hint: "build.nvidia.com - free tier, no card - verified",
+  },
+  {
+    // Verified 2026-09-16 with a real key: two evidence photos sent as 448 px
+    // base64 JPEGs, HTTP 200 in 1.9 s and 1.4 s, valid JSON back, and a
+    // correct "no" on both - people at laptops filed as "Biological
+    // reclamation target met", a black frame filed as a medical return.
+    name: "NVIDIA Vision",
+    url: "https://integrate.api.nvidia.com/v1/chat/completions",
+    model: "meta/llama-3.2-11b-vision-instruct",
+    hint: "reads photos - save it, then tap Use for photos - verified",
   },
   {
     name: "OpenRouter",
@@ -222,7 +237,37 @@ export async function removeProfile(id: string): Promise<CloudProfile[]> {
   if ((await getActiveProfileId()) === id) {
     await setActiveProfileId(next[0]?.id ?? null);
   }
+  // Unlike chat, photo reading does NOT move to another profile when its own
+  // is removed. Sending evidence photos to a different company than the one
+  // the officer chose is not a fallback; it is a surprise.
+  if ((await getPhotoProfileId()) === id) {
+    await setPhotoProfileId(null);
+  }
   return next;
+}
+
+export async function getPhotoProfileId(): Promise<string | null> {
+  try {
+    return await AsyncStorage.getItem(PHOTO_STORE);
+  } catch {
+    return null;
+  }
+}
+
+export async function setPhotoProfileId(id: string | null): Promise<void> {
+  try {
+    if (id) await AsyncStorage.setItem(PHOTO_STORE, id);
+    else await AsyncStorage.removeItem(PHOTO_STORE);
+  } catch {
+    /* best effort */
+  }
+}
+
+/** The profile that reads photos the phone could not, or null when it is off. */
+export async function getPhotoProfile(): Promise<CloudProfile | null> {
+  const id = await getPhotoProfileId();
+  if (!id) return null;
+  return (await loadProfiles()).find((p) => p.id === id) ?? null;
 }
 
 /**
@@ -368,5 +413,87 @@ export async function askCloud(
       `a "flash-lite" answers this in full.]`
     );
   }
+  return text;
+}
+
+/**
+ * Ask a cloud vision model to read one evidence photo against its duty.
+ *
+ * The fallback for the on-device reading, used only when that one failed or
+ * could not decide, and only when the officer has chosen a profile for photos.
+ *
+ * WHAT LEAVES THE PHONE: the small 448 px copy of the photo and the duty
+ * title. Not the full-resolution evidence, not the coordinates, not the
+ * address, not the ledger - there is no parameter here to carry any of them.
+ *
+ * The prompt and the JSON shape are the ones verified against NVIDIA's
+ * meta/llama-3.2-11b-vision-instruct, and reading.ts parseReading() reads the
+ * reply. Returns the raw text.
+ */
+export async function readPhotoInCloud(
+  profile: CloudProfile,
+  jpegBase64: string,
+  dutyTitle: string,
+): Promise<string> {
+  if (!profile.model) throw new Error(`${profile.label} has no model set.`);
+
+  // Short: a vision model on a fast endpoint answered in under two seconds,
+  // and this runs while an officer may be waiting on a sync.
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), 45_000);
+  let res: Response;
+  try {
+    res = await fetch(profile.url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${profile.key}`,
+      },
+      body: JSON.stringify({
+        model: profile.model,
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "image_url",
+                image_url: { url: `data:image/jpeg;base64,${jpegBase64}` },
+              },
+              {
+                type: "text",
+                text:
+                  `This photo was filed as evidence for the duty "${dutyTitle}". ` +
+                  "Reply with JSON only, no other text: " +
+                  '{"seen": "<one sentence>", "matches_duty": "yes|no|unclear", ' +
+                  '"why": "<short reason>", "problem": "<visible problem or none>"}',
+              },
+            ],
+          },
+        ],
+        // Capped here, unlike chat: the answer is one short JSON object, and
+        // a low temperature keeps a verdict from changing between retries.
+        max_tokens: 220,
+        temperature: 0.2,
+      }),
+      signal: ac.signal,
+    });
+  } catch (e) {
+    if (ac.signal.aborted) {
+      throw new Error(`${profile.label} did not read the photo within 45 seconds.`);
+    }
+    throw new Error(`${profile.label} could not be reached: ${e instanceof Error ? e.message : String(e)}`);
+  } finally {
+    clearTimeout(timer);
+  }
+
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(`${profile.label} returned ${res.status}. ${detail.slice(0, 160)}`);
+  }
+  const json = (await res.json()) as {
+    choices?: { message?: { content?: string } }[];
+  };
+  const text = json.choices?.[0]?.message?.content?.trim();
+  if (!text) throw new Error(`${profile.label} returned no answer for the photo.`);
   return text;
 }

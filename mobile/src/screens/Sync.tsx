@@ -12,15 +12,17 @@ import {
 } from "react-native";
 
 import { listQueue, type Capture } from "../lib/db";
-import { syncQueue, type SyncResult } from "../lib/sync";
+import { syncQueue, type SyncResult, type SyncStage } from "../lib/sync";
 import {
   PROVIDERS,
   addProfile,
   askCloud,
   getActiveProfileId,
+  getPhotoProfileId,
   loadProfiles,
   removeProfile,
   setActiveProfileId,
+  setPhotoProfileId,
   type CloudProfile,
 } from "../lib/cloudFallback";
 import { C, mono } from "../theme";
@@ -44,6 +46,8 @@ export default function Sync({ online }: { online: boolean }) {
   // Saved connections, and which one CLOUD is currently pointed at.
   const [profiles, setProfiles] = useState<CloudProfile[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
+  // The profile that reads photos the phone model could not. Null = off.
+  const [photoId, setPhotoId] = useState<string | null>(null);
 
   // The form for adding one more.
   const [draftLabel, setDraftLabel] = useState("");
@@ -94,6 +98,7 @@ export default function Sync({ online }: { online: boolean }) {
   useEffect(() => {
     void loadProfiles().then(setProfiles);
     void getActiveProfileId().then(setActiveId);
+    void getPhotoProfileId().then(setPhotoId);
   }, []);
 
   /** Just the host, so a long endpoint does not wrap over three lines. */
@@ -119,8 +124,19 @@ export default function Sync({ online }: { online: boolean }) {
     setBusy(true);
     setResult(null);
     try {
-      const r = await syncQueue((done, total) =>
-        setProgress(`${done} of ${total}`),
+      // Say which step is running. Reading a photo on this phone takes far
+      // longer than uploading it, and "Uploading 1 of 3" sitting still for a
+      // minute reads as a hang.
+      const r = await syncQueue((done, total, stage?: SyncStage) =>
+        setProgress(
+          stage === "reading"
+            ? `Reading photo ${done + 1} of ${total}`
+            : stage === "address"
+              ? `Finding address ${done + 1} of ${total}`
+              : stage === "annotations"
+                ? "Sending summaries"
+                : `Uploading ${Math.min(done + 1, total)} of ${total}`,
+        ),
       );
       setResult(r);
     } finally {
@@ -178,7 +194,7 @@ export default function Sync({ online }: { online: boolean }) {
         {busy ? (
           <View style={s.busyRow}>
             <ActivityIndicator color="#fff" size="small" />
-            <Text style={s.primaryText}>Uploading {progress}</Text>
+            <Text style={s.primaryText}>{progress ?? "Starting"}…</Text>
           </View>
         ) : (
           <Text style={s.primaryText}>
@@ -235,11 +251,26 @@ export default function Sync({ online }: { online: boolean }) {
                   {p.model || "no model set"} · {host(p.url)}
                 </Text>
               </View>
+              {/* Photos go to one profile at most, chosen explicitly. Tapping
+                  the chosen one again switches the cloud photo fallback off. */}
+              <TouchableOpacity
+                style={[s.photoBtn, photoId === p.id && s.photoBtnOn]}
+                onPress={async () => {
+                  const next = photoId === p.id ? null : p.id;
+                  await setPhotoProfileId(next);
+                  setPhotoId(next);
+                }}
+              >
+                <Text style={[s.photoBtnText, photoId === p.id && s.photoBtnTextOn]}>
+                  {photoId === p.id ? "photos: on" : "use for photos"}
+                </Text>
+              </TouchableOpacity>
               <TouchableOpacity
                 onPress={async () => {
                   const next = await removeProfile(p.id);
                   setProfiles(next);
                   setActiveId(await getActiveProfileId());
+                  setPhotoId(await getPhotoProfileId());
                 }}
               >
                 <Text style={s.provDel}>remove</Text>
@@ -247,6 +278,13 @@ export default function Sync({ online }: { online: boolean }) {
             </TouchableOpacity>
           );
         })}
+        {profiles.length > 0 && (
+          <Text style={s.cloudState}>
+            {photoId
+              ? "Photos: read on this phone first. Sent to the chosen provider only when the phone model fails or is unsure."
+              : "Photos: read on this phone only. Tap \"use for photos\" on a vision model to add a cloud fallback."}
+          </Text>
+        )}
         {profiles.length === 0 && (
           <Text style={s.cloudState}>
             none saved - everything stays on this device
@@ -515,6 +553,13 @@ const s = StyleSheet.create({
   provName: { fontSize: 12, fontWeight: "700", color: C.ink },
   provMeta: { marginTop: 2, fontSize: 10, color: C.inkSoft },
   provDel: { fontSize: 10, fontWeight: "600", color: C.crit },
+  photoBtn: {
+    borderWidth: 1, borderColor: C.line, borderRadius: 10,
+    paddingHorizontal: 8, paddingVertical: 3, marginRight: 8,
+  },
+  photoBtnOn: { borderColor: "#7c5cc4", backgroundColor: "#f3eefc" },
+  photoBtnText: { fontSize: 10, fontWeight: "600", color: C.inkSoft },
+  photoBtnTextOn: { color: "#5b3e96" },
   presetRow: { marginTop: 8 },
   preset: {
     borderWidth: 1, borderColor: C.line, borderRadius: 14,
