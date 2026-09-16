@@ -152,10 +152,18 @@ def sign(
     return_id: int,
     body: SignIn,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles("mine_manager")),
+    user: User = Depends(require_roles("mine_manager", "safety_officer")),
 ) -> StatutoryReturn:
-    """A certificated officer signs, and it locks. This is the same
-    accountability chain the Mines Act already sets out."""
+    """A named officer signs, and it locks.
+
+    Both mine staff roles may sign here. Under the Mines Act the certificated
+    manager is the accountable signatory, so a production deployment should
+    narrow this back to mine_manager; it is widened for the demo so every team
+    member can drive the flow under their own login. What the system actually
+    guarantees is unchanged and is the point worth making: software never
+    files anything, a NAMED PERSON does, and the signature is recorded against
+    them and locked.
+    """
     ret = db.get(StatutoryReturn, return_id)
     if not ret:
         raise HTTPException(status_code=404, detail="return not found")

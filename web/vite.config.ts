@@ -21,6 +21,13 @@ export default defineConfig({
     // untrusted network - it proxies straight to the API with no auth of its
     // own.
     host: true,
+    // Vite refuses requests whose Host header it does not recognise, which is
+    // an anti-DNS-rebinding guard, not a bug. A Cloudflare quick tunnel serves
+    // the dashboard on a random *.trycloudflare.com name, so that suffix has
+    // to be allowed or every request comes back 403 "Blocked request".
+    // Scoped to the tunnel domain rather than `true`, which would accept any
+    // Host header at all.
+    allowedHosts: [".trycloudflare.com"],
     proxy: {
       // Dashboard talks to the API through the dev server, so there is no CORS
       // surprise when a phone or a tunnel is in play.

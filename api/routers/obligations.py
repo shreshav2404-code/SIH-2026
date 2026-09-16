@@ -174,7 +174,13 @@ def get_obligation(
 def create_obligation(
     body: ObligationCreate,
     db: Session = Depends(get_db),
-    user: User = Depends(current_user),
+    # Staff only, matching PATCH and DELETE. This used to be current_user, so a
+    # REGULATOR could add duties to a mine's register - caught by testing every
+    # role against every verb rather than reading the code. It made the
+    # read-only regulator claim false: nisarga was refused edit and delete but
+    # got 201 on create. resolve_mine_id cannot catch it, because it hands a
+    # regulator whichever mine they name.
+    user: User = Depends(require_roles("mine_manager", "safety_officer")),
 ) -> ObligationOut:
     resolve_mine_id(user, body.mine_id)
     st = db.get(Statute, body.statute_id)
@@ -239,13 +245,16 @@ def patch_obligation(
 def delete_obligation(
     obligation_id: int,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles("mine_manager")),
+    user: User = Depends(require_roles("mine_manager", "safety_officer")),
 ) -> None:
     """Remove a duty from this mine's register.
 
-    Manager only, and narrower than editing on purpose: deleting a statutory
-    duty makes it stop being tracked, and that is a decision the person
-    accountable for the register should make rather than anyone with a login.
+    Open to both mine staff roles. It was manager-only, on the reasoning that
+    removing a statutory duty from tracking is the accountable person's call -
+    but the team wanted every member able to manage the register during the
+    demo while keeping their own job titles, and that is their decision to
+    make. A regulator is still refused: they inspect the register, they do not
+    edit it.
 
     Refuses while evidence still points at it. A capture whose obligation has
     vanished is an orphan in the hash chain - the row still hashes, but nobody
