@@ -24,7 +24,9 @@ router = APIRouter(prefix="/returns", tags=["returns"])
 RETURN_SCOPE = {
     "EIA_HALF_YEARLY": ("EIA Notification 2006", "Environment (Protection) Act 1986"),
     "CMR_ANNUAL": ("Coal Mines Regulations 2017",),
-    "MINES_RULES_ANNUAL": ("Mines Rules 1955",),
+    # Was MINES_RULES_ANNUAL. The Mines Rules 1955 were superseded by the OSH
+    # (Central) Rules 2026; the annual return is now FORM-XVII (R. 74).
+    "OSH_ANNUAL": ("OSH Code 2020", "OSH (Central) Rules 2026"),
 }
 
 

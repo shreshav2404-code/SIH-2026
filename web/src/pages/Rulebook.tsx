@@ -27,7 +27,7 @@ himself that the results are placed before the Safety Committee.`;
 const ROLES = [
   "Mine Manager", "Safety Officer", "Ventilation Officer", "Environment Officer",
   "Medical Officer", "Welfare Officer", "Workmen's Inspector",
-  "Rescue Superintendent", "Owner/Agent", "Surveyor",
+  "Rescue Superintendent", "Owner/Agent", "Surveyor", "HEMM Operator",
 ];
 const FREQS = [
   "continuous", "daily", "weekly", "4x_weekly", "fortnightly", "monthly",
