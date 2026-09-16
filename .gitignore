@@ -62,6 +62,11 @@ models-archive/
 .venv-train/
 out/
 data/*.jsonl
+# Official statute PDFs (~35 MB) and the text pulled from them. Public, and
+# re-downloadable from the exact URLs in data/SOURCES.md, so the repo records
+# where they came from rather than carrying the files.
+data/sources/
+data/text/
 tools/llama.cpp/
 tools/llama-bin/
 tools/llama-win.zip

@@ -42,14 +42,19 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--epochs", type=int, default=6)
     ap.add_argument("--lr", type=float, default=5e-5)
+    # Both overridable so a new model trains BESIDE the one on the phone
+    # rather than over it. The shipped model is only replaced after the new
+    # one has beaten it on tools/eval_scored.py.
+    ap.add_argument("--data", type=Path, default=DATA)
+    ap.add_argument("--out", type=Path, default=OUT)
     cli = ap.parse_args()
 
     if not torch.cuda.is_available():
         raise SystemExit("No CUDA device. This needs the GPU build of torch.")
     print(f"  device: {torch.cuda.get_device_name(0)}")
 
-    rows = [json.loads(l) for l in DATA.read_text(encoding="utf-8").splitlines() if l.strip()]
-    print(f"  {len(rows)} training examples")
+    rows = [json.loads(l) for l in cli.data.read_text(encoding="utf-8").splitlines() if l.strip()]
+    print(f"  {len(rows)} training examples from {cli.data.name}")
 
     tok = AutoTokenizer.from_pretrained(BASE)
     model = AutoModelForCausalLM.from_pretrained(
@@ -71,7 +76,7 @@ def main() -> None:
         model=model,
         train_dataset=ds,
         args=SFTConfig(
-            output_dir=str(OUT),
+            output_dir=str(cli.out),
             per_device_train_batch_size=4,
             gradient_accumulation_steps=4,
             num_train_epochs=cli.epochs,
@@ -87,10 +92,10 @@ def main() -> None:
     )
     trainer.train()
 
-    OUT.mkdir(parents=True, exist_ok=True)
-    trainer.save_model(str(OUT))
-    tok.save_pretrained(str(OUT))
-    print(f"  saved -> {OUT}")
+    cli.out.mkdir(parents=True, exist_ok=True)
+    trainer.save_model(str(cli.out))
+    tok.save_pretrained(str(cli.out))
+    print(f"  saved -> {cli.out}")
 
 
 if __name__ == "__main__":
