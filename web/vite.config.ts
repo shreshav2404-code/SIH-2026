@@ -12,7 +12,17 @@ import { defineConfig } from "vite";
  */
 const API_PROXY = {
   "/api": {
-    target: "http://localhost:8000",
+    // 127.0.0.1, never "localhost". localhost resolves AAAA ::1 before A
+    // 127.0.0.1 on this machine, and uvicorn binds 0.0.0.0 - IPv4 only - so
+    // the proxy opens a connection to ::1:8000 that nothing answers and waits
+    // for the OS timeout before retrying on IPv4. Measured: the first /api
+    // call after a restart took 21 SECONDS and returned nothing; every call
+    // after it took 5 ms, because the failure is cached. A 21-second hang on
+    // the first sign-in of a demo is the whole cost of one word.
+    //
+    // The same trap already cost this project once - see the note above the
+    // health check in start-demo.ps1.
+    target: "http://127.0.0.1:8000",
     changeOrigin: true,
     rewrite: (p: string) => p.replace(/^\/api/, ""),
   },
