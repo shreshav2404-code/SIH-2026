@@ -160,3 +160,32 @@ This file tracks all key technical, architectural, and operational decisions mad
   2. `unverifiedCitations()` checks every statute-shaped phrase in the answer against the acts actually supplied. This is deterministic code, per the project's own rule that the model does language work and deterministic code does safety-critical work — and a statutory citation in a compliance record is safety-critical.
   3. The caption now tells the truth: **"grounded - every citation verified"** only when the check passes, otherwise **"citation could NOT be verified against the ledger"** with the offending reference named in the answer body.
 - **Consequence:** the Rulebook screen already rejected fabricated clause refs on the extraction path; the Q&A path had no such check and now has one. A wrong statute number can still be generated, but it can no longer be presented as grounded.
+
+---
+
+### ADR-013: The Runtime Is llama.cpp, Not LiteRT-LM
+- **Date:** 2026-09-05
+- **Status:** Accepted & Implemented
+- **Supersedes:** the runtime premise of ADR-007, ADR-008, ADR-010 and ADR-011. Their *measurements* stand; the engine they were measured on is gone, so any conclusion of theirs that depends on LiteRT-LM behaviour no longer binds.
+- **Context:** every small model that ADR-010's survey selected came back **broken** on the M31s' Mali GPU path. Granite 4.0 350M answered a ledger question with `_opt_opt_opt_opt...`; LFM2.5 230M answered with `ERERERERER...`. Both loaded, both reported healthy, both produced degenerate output.
+- **Root cause.** Two unrelated model families collapsing into repeated tokens is a backend fault, not a model fault. Mali-G72 is a 2019 mid-range part with a shaky OpenCL story, and the same runtime charged 2.6 GB of GPU memory for a 459 MB model. ADR-011 celebrated LiteRT-LM taking the GPU rung; it turns out taking that rung was the problem, not the prize.
+- **Decision:** replace the engine with **llama.cpp** via `llama.rn` (pinned 0.12.9), running on the **CPU**. Models ship as Q4_0 GGUF.
+  1. **Qwen3 1.7B** becomes the default. Under LiteRT it was unusable — it answered a ledger question by calling the question unclear, because its chat template reads `{%- if not enable_thinking|default(true) %}` and *undefined is not false*, so reasoning stayed on and nothing in LiteRT-LM could turn it off. llama.cpp can set it. This is the only model measured on this handset to answer a ledger question with every owner and due date correct.
+  2. **ANUPALAN 270M** — Gemma 3 270M fine-tuned on 1,078 examples drawn from this project — is the fast option, and unlike the old 230M it is **not** `chatOnly`: being trustworthy with a duty table is the whole reason it was tuned.
+  3. **LFM2.5-VL 450M** plus its `mmproj` encoder restores something LiteRT never gave us: **the app reads photographs on-device.** ADR-010 recorded "no image input" as a cost of the small-model ladder. That cost is refunded. Audio is not — no bundled model does it, so the app refuses rather than pretending.
+  4. The load ladder becomes `gpu/3072 → cpu/3072 → cpu/2048 → cpu/1024`. On this phone the GPU rung never wins, which is now the desired outcome.
+- **Consequence:** slower per token in theory, correct in practice. A compliance tool can trade the first for the second and cannot trade the other way. Model switching also works mid-session now — `isEngineCorrupted()` and `switchedThisSession` survive as detectors for the LiteRT failure mode in case it ever returns.
+- **What did not change:** the model still does language work only. Threshold breaches, `ST_Contains` boundary checks, hash-chain verification and statutory filing never touch it, whatever engine it runs on.
+
+---
+
+### ADR-014: Every Demo Designation May Write, and a Signature Cannot Be Forged
+- **Date:** 2026-09-16
+- **Status:** Accepted & Implemented
+- **Context:** five teammates share one mine's register during a demo, and swapping logins mid-answer is not a thing anyone should do in front of judges. Separately, testing every role against every verb turned up a hole: `POST /obligations` was gated on `current_user` rather than a role, so a regulator could add duties while being refused edit and delete.
+- **Decision:**
+  1. `DEMO_WRITERS` in `api/auth.py` is the one tuple that says which designations may write, and it lists all three. The role survives as a **designation** — the job title recorded against a person's actions — not as a permission ceiling. Narrowing back to the statutory split is dropping one string from that tuple.
+  2. A regulator may hold a home mine. In the field they have none and name one per query; the seeded regulator defaults to Gevra so the whole team works one register, and can still name any other mine.
+  3. The dashboard asks the same question the server does. It was computing permissions separately and had drifted twice — hiding delete from a safety officer the API had started accepting, and hiding every write control from a regulator who could write. A button missing when the request would succeed is as wrong as one that 403s.
+- **The forgeable signature.** `POST /returns/{id}/sign` read `signature_name` and `certificate_no` **from the request body** and wrote them onto the return. Any signed-in caller could therefore sign as anybody, on the one document whose entire value is that a named person put their name to it — and the dashboard was sending a hardcoded `MGR/2019/4471` whoever was logged in, so every officer signed under the mine manager's certificate. Both now come from the token; `SignIn` is deliberately empty. Verified: a sign request claiming to be Keshav, sent with the regulator's token, records *Nisarga* and no certificate, and a second sign is still 409.
+- **Consequence:** widening who may act did not widen what the system will believe. The hash chain, the threshold arithmetic, the boundary checks and the rule that a named person signs are all untouched.

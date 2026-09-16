@@ -28,11 +28,11 @@ Five demo moments, each mapping to a claim on the deck:
 ## Architecture
 
 ```
-PHONE (S25+) / EMULATOR          BROWSER (:5173)
+PHONE (Galaxy M31s) / EMULATOR   BROWSER (:5173)
 React Native + Expo              React dashboard
-Gemma 4 E4B on-device            ledger · map · alerts · risk
+3 GGUF models via llama.cpp      ledger · map · alerts · risk
 MiniLM · SQLite queue
-camera · GPS · voice
+camera · GPS
       |                                |
       +--------------+-----------------+
                      |
@@ -49,10 +49,19 @@ verification and statutory filing never touch the model.
 
 | Model | Job | Runs |
 |---|---|---|
-| Gemma 4 E4B | all language, image, voice | **on-device** |
+| Qwen3 1.7B (Q4_0) | default — all grounded language work | **on-device** |
+| ANUPALAN 270M (Q4_0) | the same jobs, fastest — Gemma 3 270M fine-tuned on this project | **on-device** |
+| LFM2.5-VL 450M (+ encoder) | reads photographs | **on-device** |
 | MiniLM L6-v2 | clause retrieval | on-device |
 | XGBoost | risk scoring — deterministic | backend |
 | YOLOv8n | evidence photo detection | backend |
+
+All three run on **llama.cpp** (`llama.rn`), CPU, in airplane mode. There is no
+server model and no cloud in any graded demo moment. The Ask screen does have
+an optional CLOUD chip: off unless the officer saves their own free-tier key,
+never automatic, never given the ledger, and every answer it returns is
+labelled as having left the device. Audio is not supported — no bundled model
+does it, so the app refuses rather than pretending.
 
 ---
 
@@ -107,13 +116,14 @@ the running system rather than estimated.
 ## Checks
 
 ```bash
-cd api  && python -m pytest tests/ -q   # 29 tests, no database needed
+cd api  && python -m pytest tests/ -q   # 36 tests, no database needed
 cd web  && npm run check                # typecheck + lint
 cd mobile && npm run typecheck
 ```
 
 The tests cover the deterministic half — the hash chain, both breach triggers,
-and the locations catalogue. They deliberately stop there: a CI runner cannot
+the locations catalogue, and the clause chunker that decides which regulation
+gets retrieved. They deliberately stop there: a CI runner cannot
 verify a model answering a ledger question or a GGUF loading on a Mali GPU, and
 a green tick implying otherwise would be worse than no tick.
 
@@ -121,7 +131,8 @@ a green tick implying otherwise would be worse than no tick.
 
 ## Cost
 
-**₹0.** Everything is free and open source, nothing runs in the cloud. The model runs
-on-device; Postgres, FastAPI and the dashboard run on the developer's laptop under
+**₹0.** Everything is free and open source, and nothing the demo depends on runs in
+the cloud. The models run on-device; Postgres, FastAPI and the dashboard run on the developer's laptop under
 Docker; maps use OpenStreetMap, not Google. No API key, no server rental, no
-subscription anywhere in the stack.
+subscription anywhere in the stack. The optional CLOUD chip uses a free-tier key
+supplied by the officer, and nothing depends on it.

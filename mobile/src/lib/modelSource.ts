@@ -1,9 +1,10 @@
 /**
  * Find the model files, wherever they happen to live.
  *
- * LiteRT-LM's loadModel() takes a real filesystem path or an HTTPS URL — it
- * cannot read an APK asset directly, because it memory-maps the file. So a
- * bundled model has to be extracted to app storage exactly once.
+ * llama.cpp takes a real filesystem path and memory-maps the file, so it
+ * cannot read an APK asset directly. A bundled model has to be extracted to
+ * app storage exactly once. (LiteRT-LM had the same constraint for the same
+ * reason, so this survived the engine change unchanged.)
  *
  * Two sources are tried in order, so the same build works whether the model
  * was bundled or pushed over a cable:
@@ -217,10 +218,12 @@ const PREF_KEY = "anupalan.model";
 /**
  * Remember the chosen model across launches.
  *
- * This matters more than a convenience. LiteRT-LM cannot reliably load a
- * second model after closing the first - switching mid-session leaves the
- * engine unable to invoke, so the fallback is to reopen the app. That is only
- * a workable answer if the choice survives the restart.
+ * Convenience now, and it used to be more than that: LiteRT-LM could not
+ * reliably load a second model after closing the first, so a mid-session
+ * switch meant reopening the app, and that is only workable if the choice
+ * survives the restart. llama.cpp switches cleanly, but a remembered choice
+ * is still the right default - an officer who picked the tuned model for
+ * speed should not have to pick it again.
  */
 export async function loadPreferredModel(): Promise<ModelSpec> {
   try {
