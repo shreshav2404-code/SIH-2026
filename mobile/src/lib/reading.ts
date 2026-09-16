@@ -69,9 +69,10 @@ function value(line: string, label: RegExp): string | null {
 }
 
 /**
- * The grammar-constrained answer. describeEvidence() forces this shape, so
- * this is the normal path; the labelled-line parser below it is kept for a
- * model or engine that returns text anyway.
+ * A JSON answer - what the cloud vision model returns when asked. The
+ * labelled-line parser below it covers a model that answers in text anyway.
+ * (The on-device model does not come through here: a JSON grammar returned an
+ * empty string from it, so it answers three plain questions instead.)
  */
 function fromJson(raw: string): Reading | null {
   const start = raw.indexOf("{");
@@ -169,6 +170,55 @@ function cleanAnswer(raw: string): string {
   return s.split(/\n\s*\n/)[0].replace(/\s+/g, " ").trim();
 }
 
+/**
+ * End a model's text on a whole sentence, or failing that a whole word.
+ *
+ * Answers are capped in tokens, so they stop wherever the cap lands. On the
+ * dashboard that read "there is no visible ind." and "illuminated by
+ * colorful" - text that looks broken even when the reading is right.
+ */
+function wholeSentences(s: string, max: number): string {
+  let t = s.trim().slice(0, max);
+  if (/[.!?]$/.test(t)) return t;
+  const end = Math.max(t.lastIndexOf(". "), t.lastIndexOf("! "), t.lastIndexOf("? "));
+  // A short unfinished tail is noise; drop it. A long one usually carries the
+  // actual reason ("a close-up of an industrial setting with metal bars and
+  // lighting fixtures, but there is no visible ind") - keep it, cut on a word.
+  if (end > 20 && t.length - end < 60) return t.slice(0, end + 1);
+  // Cut before a trailing clause the cap broke off - ", but there is no
+  // visible" says less than stopping at the comma - then on a word.
+  const comma = t.lastIndexOf(", ");
+  if (comma > t.length * 0.6) t = t.slice(0, comma);
+  else {
+    const space = t.lastIndexOf(" ");
+    if (space > 20) t = t.slice(0, space);
+  }
+  return `${t.replace(/[,;:\-–]+$/, "")}…`;
+}
+
+/**
+ * Drop a reason's opening sentence when it only repeats the question.
+ *
+ * Asked whether a photo shows "Notice of opening a mine", the model answers
+ * 'no - it doesn't show "Notice of opening a mine". The image displays an HP
+ * laptop...'. The first sentence adds nothing and put the duty title on the
+ * dashboard twice in one line; the second is the actual reason.
+ */
+function withoutRestatement(why: string, dutyTitle: string): string {
+  const first = why.match(/^[^.!?]*[.!?]\s*/)?.[0] ?? "";
+  const restates =
+    first &&
+    (first.toLowerCase().includes(dutyTitle.toLowerCase()) ||
+      /^(it|this|the (photo|image|picture))\s+(does not|doesn't|do not|don't)\s+(appear to\s+)?show\b/i.test(first));
+  const rest = restates ? why.slice(first.length).trim() : why;
+  // Nothing but the restatement: there is no reason to show. Better no reason
+  // than the duty title a second time.
+  if (!rest) return "";
+  // "no - The image displays" reads as a typo; lower-case a capital that
+  // starts an ordinary word, but leave acronyms like "HP" alone.
+  return rest.replace(/^([A-Z])(?=[a-z])/, (c) => c.toLowerCase());
+}
+
 /** "No, nothing unsafe" is none. "No guard rail on the conveyor" is a problem. */
 function isNoProblem(s: string): boolean {
   const t = s.trim();
@@ -211,10 +261,10 @@ export function readingFromAnswers(
 
   const p = cleanAnswer(problem);
   return {
-    seen: seen ? seen.slice(0, 300) : null,
+    seen: seen ? wholeSentences(seen, 300) : null,
     match,
-    why: why ? why.slice(0, 200) : null,
-    problem: p && !isNoProblem(p) ? p.slice(0, 200) : null,
+    why: why ? wholeSentences(why, 400) : null,
+    problem: p && !isNoProblem(p) ? wholeSentences(p, 200) : null,
   };
 }
 
@@ -236,20 +286,26 @@ export function toAnnotation(
     throw new Error("The model returned nothing that describes the photo.");
   }
 
+  // One sentence of reason is enough in a line that already names the duty,
+  // and the server keeps problems to 200 characters - so cut it here, on a
+  // sentence, rather than let the server cut it mid-word.
+  const why = r.why ? withoutRestatement(r.why, dutyTitle) : null;
+  const shortWhy = why ? wholeSentences(why.match(/^[^.!?]*[.!?]/)?.[0] ?? why, 150) : null;
+  // End each part with one full stop - unless the text was cut, in which
+  // case the ellipsis stays, so a reader can see it was.
+  const stop = (s: string) => s.replace(/\.$/, "");
+  const end = (s: string) => (s.endsWith("…") ? s : `${stop(s)}.`);
+
   const parts: string[] = [];
-  if (r.seen) parts.push(`Seen: ${r.seen.replace(/\.$/, "")}.`);
-  parts.push(
-    `Matches duty: ${MATCH_WORDS[r.match]}${r.why ? ` - ${r.why.replace(/\.$/, "")}` : ""}.`,
-  );
-  parts.push(`Problem: ${r.problem ? r.problem.replace(/\.$/, "") : "none seen"}.`);
+  if (r.seen) parts.push(`Seen: ${end(r.seen)}`);
+  parts.push(`Matches duty: ${MATCH_WORDS[r.match]}${why ? ` - ${end(why)}` : "."}`);
+  parts.push(`Problem: ${r.problem ? end(r.problem) : "none seen."}`);
 
   const problems: string[] = [];
   if (r.match === "no") {
-    problems.push(
-      `Does not appear to show "${dutyTitle}"${r.why ? `: ${r.why.replace(/\.$/, "")}` : ""}`,
-    );
+    problems.push(`Does not appear to show "${dutyTitle}"${shortWhy ? `: ${stop(shortWhy)}` : ""}`);
   }
-  if (r.problem) problems.push(r.problem.replace(/\.$/, ""));
+  if (r.problem) problems.push(stop(r.problem));
 
   return { description: parts.join(" "), problems, model };
 }

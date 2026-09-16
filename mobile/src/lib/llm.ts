@@ -1025,7 +1025,10 @@ export async function describeEvidence(
   const verdict = await ask(
     `Does this photo show "${duty.title}" being done? Start your answer with ` +
       "yes, no or unclear, then give one short reason.",
-    45,
+    // 70, up from 45: at 45 the reason stopped mid-word on both captures
+    // checked on the M31s ("there is no visible ind"). Each extra token here
+    // costs a fraction of a second; the photo prefix is already encoded.
+    70,
   );
   const problem = await ask(
     "Is anything in this photo unsafe, damaged or wrong? If nothing, answer none.",
