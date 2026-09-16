@@ -23,7 +23,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from services.embeddings import chunk  # noqa: E402
+from services.chunking import chunk  # noqa: E402
 
 CIRCULAR = (
     "DGMS (Tech) Circular No. 05 of 2026. In every belowground coal mine the "
