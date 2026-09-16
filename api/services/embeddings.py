@@ -10,18 +10,19 @@ from __future__ import annotations
 
 import re
 from functools import lru_cache
+from typing import TYPE_CHECKING
 
-from sqlalchemy import select
-from sqlalchemy.orm import Session
+if TYPE_CHECKING:
+    from sqlalchemy.orm import Session
 
-from config import settings
-from models import Statute
+    from models import Statute
 
 
 @lru_cache(maxsize=1)
 def _model():
     """Loaded lazily — the API must start without the ML stack installed."""
     from sentence_transformers import SentenceTransformer
+    from config import settings
 
     return SentenceTransformer(settings.embedding_model)
 
@@ -77,8 +78,14 @@ def chunk(text: str, max_chars: int = 480, min_chars: int = 25) -> list[str]:
     return chunks
 
 
-def nearest(db: Session, vector: list[float], k: int = 3) -> list[tuple[Statute, float]]:
+def nearest(
+    db: "Session", vector: list[float], k: int = 3
+) -> list[tuple["Statute", float]]:
     """pgvector cosine distance. Similarity = 1 - distance."""
+    from sqlalchemy import select
+
+    from models import Statute
+
     distance = Statute.embedding.cosine_distance(vector).label("distance")
     rows = db.execute(
         select(Statute, distance)
@@ -89,7 +96,11 @@ def nearest(db: Session, vector: list[float], k: int = 3) -> list[tuple[Statute,
     return [(st, 1.0 - float(d)) for st, d in rows]
 
 
-def corpus_is_embedded(db: Session) -> bool:
+def corpus_is_embedded(db: "Session") -> bool:
+    from sqlalchemy import select
+
+    from models import Statute
+
     return db.scalar(
         select(Statute.id).where(Statute.embedding.is_not(None)).limit(1)
     ) is not None
