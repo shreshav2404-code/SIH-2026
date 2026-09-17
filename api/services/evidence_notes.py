@@ -26,8 +26,11 @@ MAX_FIELD = 120
 # The formatted one-line address runs longer than any single part of it.
 MAX_FULL = 240
 MAX_PROBLEMS = 5
-MAX_PROBLEM_LEN = 200
-MAX_DESCRIPTION = 600
+# A duty-mismatch problem quotes the duty title (up to ~70 characters) and
+# then gives the model's reason, so 200 cut real reasons mid-word: "...but
+# there is no indication of".
+MAX_PROBLEM_LEN = 360
+MAX_DESCRIPTION = 900
 
 # An Indian PIN is six digits and never starts with 0. Anything else is a
 # geocoder guess dressed as a pincode, and a wrong PIN on evidence is worse
@@ -68,11 +71,28 @@ def clean_place(raw) -> dict | None:
     return out if set(out) - {"source"} else None
 
 
+def clip(text: str, limit: int) -> str:
+    """At most `limit` characters, never ending mid-word.
+
+    Cut at the last sentence end if one falls in the back half, else the last
+    space, and mark the cut with an ellipsis - a reviewer reading "there is no
+    indication of" cannot tell a truncation from a model that stopped talking.
+    """
+    if len(text) <= limit:
+        return text
+    head = text[: limit - 1]
+    end = max(head.rfind(". "), head.rfind("; "))
+    if end >= limit // 2:
+        return head[: end + 1]
+    space = head.rfind(" ")
+    return (head[:space] if space >= limit // 2 else head).rstrip(" ,;:-") + "…"
+
+
 def clean_problems(raw) -> list[str] | None:
     data = _loads(raw)
     if not isinstance(data, list):
         return None
-    out = [str(p).strip()[:MAX_PROBLEM_LEN] for p in data if str(p).strip()]
+    out = [clip(str(p).strip(), MAX_PROBLEM_LEN) for p in data if str(p).strip()]
     return out[:MAX_PROBLEMS] or None
 
 
@@ -80,7 +100,7 @@ def clean_description(raw) -> str | None:
     if raw is None:
         return None
     text = str(raw).strip()
-    return text[:MAX_DESCRIPTION] or None
+    return clip(text, MAX_DESCRIPTION) or None
 
 
 def format_place(place: dict | None) -> str | None:

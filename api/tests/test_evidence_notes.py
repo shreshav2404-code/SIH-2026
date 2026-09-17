@@ -13,6 +13,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from services.evidence_notes import (  # noqa: E402
+    MAX_DESCRIPTION,
+    MAX_PROBLEM_LEN,
     clean_description,
     clean_place,
     clean_problems,
@@ -68,13 +70,27 @@ def test_problems_are_trimmed_and_capped():
     raw = json.dumps(["  unsigned entry  ", "", "x" * 500] + ["p"] * 10)
     out = clean_problems(raw)
     assert out[0] == "unsigned entry"
-    assert len(out[1]) == 200
+    assert len(out[1]) <= MAX_PROBLEM_LEN
     assert len(out) == 5
+
+
+def test_long_problem_is_cut_at_a_word_not_mid_word():
+    reason = ('Does not appear to show "HEMM operator inspects the machine at the start of each shift": '
+              + "the image depicts a laptop screen displaying a timer " * 12)
+    out = clean_problems(json.dumps([reason]))[0]
+    assert len(out) <= MAX_PROBLEM_LEN
+    assert out.endswith("…")
+    assert reason.startswith(out[:-1])
+    assert out[-2] != " " and reason[len(out) - 1] == " "
+
+
+def test_short_problem_is_untouched():
+    assert clean_problems(json.dumps(["Blurred: sharpness 12"])) == ["Blurred: sharpness 12"]
 
 
 def test_empty_description_is_none():
     assert clean_description("   ") is None
-    assert len(clean_description("y" * 2000)) == 600
+    assert len(clean_description("y" * 2000)) <= MAX_DESCRIPTION
 
 
 # ---------------------------------------------------------------- summary

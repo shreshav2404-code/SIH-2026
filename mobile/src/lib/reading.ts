@@ -256,7 +256,10 @@ export function readingFromAnswers(
   if (m) {
     const word = m[1].toLowerCase();
     match = word === "yes" ? "yes" : word === "no" ? "no" : "unclear";
-    why = m[2].trim() || null;
+    // A lone quote mark before the reason - 'no - " The image depicts' - is
+    // the model opening a quotation it never closes. A quote followed by a
+    // word ('"Notice of opening" is not shown') is kept.
+    why = m[2].replace(/^["'“”‘’]\s+/, "").trim() || null;
   }
 
   const p = cleanAnswer(problem);
@@ -286,11 +289,11 @@ export function toAnnotation(
     throw new Error("The model returned nothing that describes the photo.");
   }
 
-  // One sentence of reason is enough in a line that already names the duty,
-  // and the server keeps problems to 200 characters - so cut it here, on a
-  // sentence, rather than let the server cut it mid-word.
+  // One sentence of reason is enough in a line that already names the duty.
+  // The server keeps a problem to 360 characters and cuts on a word; the
+  // title takes up to ~70 of them, so 250 here keeps a normal reason whole.
   const why = r.why ? withoutRestatement(r.why, dutyTitle) : null;
-  const shortWhy = why ? wholeSentences(why.match(/^[^.!?]*[.!?]/)?.[0] ?? why, 150) : null;
+  const shortWhy = why ? wholeSentences(why.match(/^[^.!?]*[.!?]/)?.[0] ?? why, 250) : null;
   // End each part with one full stop - unless the text was cut, in which
   // case the ellipsis stays, so a reader can see it was.
   const stop = (s: string) => s.replace(/\.$/, "");
