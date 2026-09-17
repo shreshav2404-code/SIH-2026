@@ -13,10 +13,12 @@ import {
 import { useEffect, useState } from "react";
 
 import { api, openReport } from "../api/client";
+import type { VerifyResult } from "../api/types";
 import { useAuth } from "../lib/auth";
 import { Badge, Clause, Empty, Panel } from "../lib/ui";
 import undergroundBg from "../assets/photos/underground-wide.jpg";
 import PageHero from "../lib/PageHero";
+import { ChainView } from "../lib/three";
 
 /**
  * The evidence a regulator would actually want to look at - and why.
@@ -365,20 +367,19 @@ export default function Evidence() {
   const { data: chain } = useQuery({
     queryKey: ["evidence-verify", mineId],
     queryFn: async () =>
-      (
-        await api.get<{
-          ok: boolean;
-          broken_at?: number | null;
-          checked: number;
-        }>("/evidence/verify", { params: { mine_id: mineId } })
-      ).data,
+      (await api.get<VerifyResult>("/evidence/verify", { params: { mine_id: mineId } })).data,
     refetchInterval: 15_000,
   });
 
   const flagged = (rows ?? []).filter((r) => r.review.needed).length;
+  // The server walks the chain in id order, so the drawing does too. It used
+  // to read `broken_at`, a field the API never sent, so a broken chain said
+  // "first break at evidence #?" - the one moment the number matters.
+  const brokenId = chain?.first_broken?.evidence_id ?? null;
+  const ids = (rows ?? []).map((r) => r.id).sort((a, b) => a - b);
 
   return (
-    <div className="space-y-4">
+    <div className="min-w-0 space-y-4">
       <PageHero
         image={undergroundBg}
         eyebrow="Field capture"
@@ -408,6 +409,17 @@ export default function Evidence() {
           </div>
         }
       >
+        <div className="relative -mx-1 mb-4 h-52 overflow-hidden rounded-xl bg-[radial-gradient(ellipse_at_center,#10284c_0%,#081528_70%)] ring-1 ring-black/5">
+          <div className="hero-grid absolute inset-0 opacity-70" />
+          {ids.length > 0 && <ChainView data={{ ids, brokenId }} />}
+          <div className="pointer-events-none absolute top-3 left-3 flex items-center gap-2 text-[10.5px] font-semibold tracking-[0.14em] text-sky-200/80 uppercase">
+            <span className={`size-1.5 rounded-full ${chain?.ok === false ? "pulse-dot text-red-400" : "pulse-dot text-emerald-400"}`} />
+            {chain ? (chain.ok ? "verifying · intact" : `broken at #${brokenId ?? "?"}`) : "verifying…"}
+          </div>
+          <div className="pointer-events-none absolute right-3 bottom-3 text-[11px] text-sky-100/60">
+            one block per capture · oldest on the left
+          </div>
+        </div>
         <p className="text-[13px] text-[var(--ink-soft)]">
           Each capture is hashed onto the one before it, per mine. Editing a row
           in the database breaks every hash after it, which is what makes
@@ -419,9 +431,7 @@ export default function Evidence() {
         {chain && (
           <p className="mt-2 text-[12px]">
             {chain.checked} record{chain.checked === 1 ? "" : "s"} verified
-            {chain.ok
-              ? "."
-              : ` — first break at evidence #${chain.broken_at ?? "?"}.`}
+            {chain.ok ? "." : ` — first break at evidence #${brokenId ?? "?"}.`}
           </p>
         )}
       </Panel>

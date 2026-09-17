@@ -1,10 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { useState } from "react";
 
-import { api } from "../api/client";
+import { api, apiError } from "../api/client";
 import type { Obligation, Page } from "../api/types";
 import { useAuth } from "../lib/auth";
+import seamBg from "../assets/photos/seam-wide.jpg";
+import PageHero from "../lib/PageHero";
+import { EVIDENCE_TYPES, FREQUENCIES, ROLES, optionsWith } from "../lib/vocab";
 import { Badge, Clause, Empty, Panel, RiskBar } from "../lib/ui";
 
 const STATUSES = ["", "overdue", "due", "pending", "submitted", "verified"];
@@ -21,38 +24,6 @@ const SETTABLE = ["pending", "due", "overdue", "submitted", "verified", "waived"
  * string. A fixed list is the difference between a register you can filter and
  * a register you cannot.
  */
-const ROLES = [
-  "Mine Manager",
-  "Safety Officer",
-  "Ventilation Officer",
-  "Environment Officer",
-  "Medical Officer",
-  "Surveyor",
-  "Workmen's Inspector",
-  "Electrical Supervisor",
-];
-
-const FREQUENCIES = [
-  "daily",
-  "weekly",
-  "fortnightly",
-  "monthly",
-  "quarterly",
-  "half_yearly",
-  "annual",
-  "one_off",
-];
-
-const EVIDENCE_TYPES = [
-  "photo",
-  "register_entry",
-  "diary_entry",
-  "meeting_minutes",
-  "survey",
-  "return_filing",
-  "certificate",
-];
-
 interface Statute {
   id: number;
   act: string;
@@ -183,7 +154,7 @@ function DutyDialog({
               value={draft.owner_role}
               onChange={(e) => onChange({ ...draft, owner_role: e.target.value })}
             >
-              {ROLES.map((r) => (
+              {optionsWith(ROLES, draft.owner_role).map((r) => (
                 <option key={r}>{r}</option>
               ))}
             </select>
@@ -195,7 +166,7 @@ function DutyDialog({
               value={draft.frequency}
               onChange={(e) => onChange({ ...draft, frequency: e.target.value })}
             >
-              {FREQUENCIES.map((f) => (
+              {optionsWith(FREQUENCIES, draft.frequency).map((f) => (
                 <option key={f} value={f}>
                   {f.replace(/_/g, " ")}
                 </option>
@@ -211,7 +182,7 @@ function DutyDialog({
                 onChange({ ...draft, evidence_type: e.target.value })
               }
             >
-              {EVIDENCE_TYPES.map((t) => (
+              {optionsWith(EVIDENCE_TYPES, draft.evidence_type).map((t) => (
                 <option key={t} value={t}>
                   {t.replace(/_/g, " ")}
                 </option>
@@ -309,6 +280,16 @@ export default function Ledger() {
     void qc.invalidateQueries({ queryKey: ["duties"] });
   }
 
+  // Duties created after the last scoring run have no risk score and showed
+  // "—" with no way to fix it from here: the API could rescore, the
+  // dashboard had no button for it.
+  const rescore = useMutation({
+    mutationFn: async () =>
+      (await api.post<{ recomputed: number }>("/risk/recompute", null, { params: { mine_id: user?.mine_id } })).data,
+    onSuccess: refresh,
+    onError: (e: unknown) => window.alert(apiError(e)),
+  });
+
   const save = useMutation({
     mutationFn: async (d: Draft) => {
       const body = {
@@ -349,6 +330,12 @@ export default function Ledger() {
 
   return (
     <>
+      <div className="mb-4">
+        <PageHero image={seamBg} eyebrow="Obligation ledger" title="Every statutory duty, its owner and its deadline">
+          Each row is a duty drawn from a clause in the rulebook, owned by a named role, with a due date worked
+          out from the frequency the law sets. Sort by risk to see which are most likely to slip.
+        </PageHero>
+      </div>
       <Panel
         title="Obligation ledger"
         right={
@@ -372,6 +359,21 @@ export default function Ledger() {
               <option value="due_date">By due date</option>
               <option value="risk">By risk</option>
             </select>
+            {canWrite && (
+              <button
+                onClick={() => rescore.mutate()}
+                disabled={rescore.isPending}
+                title="Score every duty's risk again, including duties added since the last run"
+                className="flex items-center gap-1.5 rounded-md border border-[var(--line)] bg-white px-2.5 py-1 text-xs font-medium disabled:opacity-50"
+              >
+                <RefreshCw size={13} className={rescore.isPending ? "animate-spin" : ""} />
+                {rescore.isPending
+                  ? "Scoring…"
+                  : rescore.data
+                    ? `Rescored ${rescore.data.recomputed}`
+                    : "Recompute risk"}
+              </button>
+            )}
             {canWrite && (
               <button
                 onClick={() => {
@@ -502,11 +504,4 @@ export default function Ledger() {
       )}
     </>
   );
-}
-
-/** The API's own sentence, when it sent one. Axios' default message never is. */
-function apiError(e: unknown): string {
-  const detail = (e as { response?: { data?: { detail?: string } } })?.response
-    ?.data?.detail;
-  return detail ?? (e instanceof Error ? e.message : String(e));
 }

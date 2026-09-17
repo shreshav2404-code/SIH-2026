@@ -71,7 +71,7 @@ export function RaiseDirective({ alert }: { alert: Alert }) {
     );
 
   return (
-    <div className="mt-2 grid gap-2 rounded-lg border border-[var(--line)] bg-slate-50/70 p-3">
+    <div className="mt-2 grid w-full basis-full gap-2 rounded-lg border border-[var(--line)] bg-slate-50/70 p-3">
       <select
         value={action}
         onChange={(e) => setAction(e.target.value)}

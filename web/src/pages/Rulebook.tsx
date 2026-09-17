@@ -12,6 +12,7 @@ import { useAuth } from "../lib/auth";
 import { Badge, Clause, Empty, Panel } from "../lib/ui";
 import railsBg from "../assets/photos/rails-wide.jpg";
 import PageHero from "../lib/PageHero";
+import { EVIDENCE_TYPES, FREQUENCIES, ROLES } from "../lib/vocab";
 
 /** A DGMS-style circular, so the demo mines real statutory language. */
 const SAMPLE = `Circular No. DGMS(Tech)/2026/14
@@ -24,19 +25,6 @@ prescribed register. Air samples drawn from the return airway shall be
 analysed within forty-eight hours of collection, and the manager shall satisfy
 himself that the results are placed before the Safety Committee.`;
 
-const ROLES = [
-  "Mine Manager", "Safety Officer", "Ventilation Officer", "Environment Officer",
-  "Medical Officer", "Welfare Officer", "Workmen's Inspector",
-  "Rescue Superintendent", "Owner/Agent", "Surveyor", "HEMM Operator",
-];
-const FREQS = [
-  "continuous", "daily", "weekly", "4x_weekly", "fortnightly", "monthly",
-  "quarterly", "half_yearly", "annual", "event_driven", "one_time",
-];
-const EVIDENCE = [
-  "photo", "reading", "document", "register", "meeting_minutes",
-  "diary_entry", "sample_result", "return_filing", "certificate", "survey",
-];
 
 /** A regulation number that does not exist, to demonstrate the guard. */
 const FABRICATED = "CMR 2017 · Reg. 999";
@@ -114,7 +102,7 @@ export default function Rulebook() {
   }
 
   return (
-    <div className="grid gap-4">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-4">
       <PageHero
         image={railsBg}
         eyebrow="Regulation-as-Code"
@@ -272,7 +260,7 @@ export default function Rulebook() {
                         onChange={(e) => patch(i, "frequency", e.target.value)}
                         className="rounded border border-[var(--line)] px-1 py-0.5 text-xs"
                       >
-                        {FREQS.map((f) => (
+                        {FREQUENCIES.map((f) => (
                           <option key={f}>{f}</option>
                         ))}
                       </select>
@@ -283,7 +271,7 @@ export default function Rulebook() {
                         onChange={(e) => patch(i, "evidence_type", e.target.value)}
                         className="rounded border border-[var(--line)] px-1 py-0.5 text-xs"
                       >
-                        {EVIDENCE.map((ev) => (
+                        {EVIDENCE_TYPES.map((ev) => (
                           <option key={ev}>{ev}</option>
                         ))}
                       </select>

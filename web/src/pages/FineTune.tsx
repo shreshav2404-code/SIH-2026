@@ -1,8 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
-import { api } from "../api/client";
+import { api, apiError } from "../api/client";
 import { useAuth } from "../lib/auth";
+import undergroundBg from "../assets/photos/underground-wide.jpg";
+import PageHero from "../lib/PageHero";
 import { Badge, Empty, Panel } from "../lib/ui";
 
 /**
@@ -101,21 +103,34 @@ export default function FineTune() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["ft-jobs"] }),
   });
 
+  // Every action here reports its failure. They used to fail silently, which
+  // is indistinguishable from a button that is not wired to anything.
+  const [downloadError, setDownloadError] = useState<string | null>(null);
+
   async function download() {
-    const res = await api.get("/finetune/dataset", {
-      params: { kind, mine_id: mineId },
-      responseType: "blob",
-    });
-    const url = URL.createObjectURL(res.data as Blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `anupalan-${kind}.jsonl`;
-    a.click();
-    URL.revokeObjectURL(url);
+    setDownloadError(null);
+    try {
+      const res = await api.get("/finetune/dataset", {
+        params: { kind, mine_id: mineId },
+        responseType: "blob",
+      });
+      const url = URL.createObjectURL(res.data as Blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `anupalan-${kind}.jsonl`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setDownloadError(apiError(e));
+    }
   }
 
   return (
     <div className="space-y-4">
+      <PageHero image={undergroundBg} eyebrow="On-device model" title="A model taught on this mine's own records">
+        Training data is built from the ledger and field observations in the exact prompt shape the phone uses, and a
+        new model ships only if it beats the current one on questions it never saw.
+      </PageHero>
       <Panel title="Training data">
         <p className="text-[13px] text-[var(--ink-soft)]">
           Built from this mine&rsquo;s own records, in the same prompt shape the
@@ -152,6 +167,9 @@ export default function FineTune() {
             Download .jsonl
           </button>
         </div>
+        {downloadError && (
+          <p className="mt-2 rounded bg-red-50 px-2 py-1.5 text-[12px] text-red-800">{downloadError}</p>
+        )}
 
         {preview?.sample ? (
           <pre className="mt-3 max-h-56 overflow-auto rounded border border-[var(--line)] bg-slate-50 p-3 text-[11px] leading-relaxed">
@@ -206,6 +224,12 @@ export default function FineTune() {
             {create.isPending ? "Registering…" : "Register run"}
           </button>
         </div>
+        {create.isError && (
+          <p className="mt-2 rounded bg-red-50 px-2 py-1.5 text-[12px] text-red-800">{apiError(create.error)}</p>
+        )}
+        {advance.isError && (
+          <p className="mt-2 rounded bg-red-50 px-2 py-1.5 text-[12px] text-red-800">{apiError(advance.error)}</p>
+        )}
 
         <div className="mt-4 overflow-x-auto">
           <table className="w-full text-[12px]">

@@ -1,42 +1,292 @@
 @import "tailwindcss";
 @import "leaflet/dist/leaflet.css";
 
+/*
+ * ANUPALAN design tokens - the "hybrid" scheme.
+ *
+ * Dark where the product speaks (navigation, page heroes, 3D scenes), light
+ * where people read data (panels, tables, forms). Dense tables in light-on-
+ * dark wash out on a projector, and a projector is where this is judged; a
+ * dark frame around light data keeps both the drama and the legibility.
+ *
+ * The variable NAMES are the ones every page already uses, so the whole
+ * dashboard picks up the palette without touching each page. Every text
+ * colour is AA or better against the surface it sits on.
+ */
 :root {
-  --ink: #0f2942;
-  --ink-soft: #4a6580;
-  --line: #dbe4ed;
-  --bg: #f4f7fa;
+  /* light content */
+  --bg: #eef2f7;
   --panel: #ffffff;
-  --accent: #14539a;
-  --ok: #17734a;
-  --warn: #9a5c00;
-  --crit: #b3261e;
+  --panel-2: #f7f9fc;
+  --line: #dfe6ef;
+  --line-strong: #c9d4e2;
+  --ink: #0b1b2e;
+  --ink-soft: #52657b;
+  --accent: #1b5bc4;
+  --accent-600: #174ea9;
+  --accent-50: #eaf1fd;
+  --ok: #0e7a4e;
+  --warn: #a35f00;
+  --crit: #c42b2b;
+
+  /* dark frame */
+  --night-950: #050d1a;
+  --night-900: #081528;
+  --night-800: #0d2140;
+  --night-700: #15305a;
+  --night-line: rgb(148 180 222 / 0.14);
+  --night-text: #e8f0fa;
+  --night-soft: #9fb4cf;
+  --glow: #38bdf8;
+  --amber: #f5a524;
+
+  /* motion */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+
+  --shadow-card: 0 1px 2px rgb(11 27 46 / 0.04), 0 1px 3px rgb(11 27 46 / 0.06);
+  --shadow-lift: 0 12px 30px -14px rgb(11 27 46 / 0.25), 0 2px 6px rgb(11 27 46 / 0.06);
 }
 
-html,
-body,
-#root {
-  height: 100%;
+@theme {
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono Variable", ui-monospace, "Cascadia Mono", Consolas, monospace;
 }
 
-body {
-  margin: 0;
-  background: var(--bg);
-  color: var(--ink);
-  font-family: ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
-  font-size: 14px;
-  -webkit-font-smoothing: antialiased;
+/*
+ * Element defaults live in the base layer so a Tailwind class on a page
+ * still wins. Outside a layer they would beat every utility regardless of
+ * specificity - which is how a nav told to hide its scrollbar kept one.
+ */
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.5;
+    /* Inter's open digits and disambiguated l/1: in a ledger of regulation
+       numbers, "R. 1(1)" and "R. l(l)" must not look alike. */
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background: rgb(27 91 196 / 0.18);
+  }
+
+  h1,
+  h2,
+  h3 {
+    letter-spacing: -0.015em;
+  }
+
+  /* A number that changes must not make the text around it jitter. */
+  td,
+  .stat-value {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Clause references read as citations, not UI chrome. */
+  .clause {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    font-weight: 500;
+    color: var(--accent);
+    letter-spacing: -0.01em;
+  }
+
+  /* ------------------------------------------------------------ buttons
+   *
+   * Motion for every button on every page without editing each call site. A
+   * press compresses slightly and keyboard focus is always visible. Nothing
+   * moves while a button is disabled: motion on something that will not
+   * respond reads as a promise it breaks.
+   */
+  button,
+  a,
+  [role="button"] {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  button {
+    transition:
+      transform 160ms var(--ease-out),
+      box-shadow 220ms var(--ease-out),
+      background-color 180ms ease,
+      border-color 180ms ease,
+      color 180ms ease,
+      opacity 180ms ease;
+  }
+
+  button:not(:disabled) {
+    cursor: pointer;
+  }
+
+  button:not(:disabled):active {
+    transform: scale(0.97);
+  }
+
+  button:focus-visible,
+  a:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  /* Filled accent buttons lift, glow and catch a sweep of light on hover. */
+  button[class*="bg-[var(--accent)]"] {
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
+  }
+
+  button[class*="bg-[var(--accent)]"]:not(:disabled):hover {
+    transform: translateY(-1px);
+    filter: brightness(0.93);
+    box-shadow: 0 8px 20px -8px rgb(27 91 196 / 0.55);
+  }
+
+  button[class*="bg-[var(--accent)]"]:not(:disabled):active {
+    transform: scale(0.97);
+  }
+
+  button[class*="bg-[var(--accent)]"]::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background: linear-gradient(110deg, transparent 30%, rgb(255 255 255 / 0.28) 50%, transparent 70%);
+    transform: translateX(-120%);
+    transition: transform 650ms var(--ease-out);
+    pointer-events: none;
+  }
+
+  button[class*="bg-[var(--accent)]"]:not(:disabled):hover::after {
+    transform: translateX(120%);
+  }
+
+  /* Outline buttons: a quieter lift. */
+  button[class*="border-[var(--line)]"]:not(:disabled):hover {
+    border-color: var(--line-strong);
+    box-shadow: var(--shadow-card);
+  }
+
+  input,
+  select,
+  textarea {
+    transition:
+      border-color 160ms ease,
+      box-shadow 200ms var(--ease-out);
+  }
+
+  input:focus,
+  select:focus,
+  textarea:focus {
+    box-shadow: 0 0 0 4px rgb(27 91 196 / 0.12);
+  }
+
+  /* Table rows follow the pointer so a wide ledger row is easy to track. */
+  tbody tr {
+    transition: background-color 140ms ease;
+  }
 }
 
-/* Clause references read as citations, not UI chrome. */
-.clause {
-  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
-  font-size: 11.5px;
-  color: var(--accent);
-  letter-spacing: -0.01em;
+/* ------------------------------------------------------------ surfaces */
+@layer components {
+  .glass-dark {
+    background: linear-gradient(180deg, rgb(8 21 40 / 0.88), rgb(5 13 26 / 0.92));
+    backdrop-filter: blur(14px) saturate(140%);
+    -webkit-backdrop-filter: blur(14px) saturate(140%);
+  }
+
+  .glass-light {
+    background: rgb(255 255 255 / 0.78);
+    backdrop-filter: blur(16px) saturate(160%);
+    -webkit-backdrop-filter: blur(16px) saturate(160%);
+  }
+
+  .hero-grid {
+    background-image:
+      linear-gradient(rgb(148 180 222 / 0.06) 1px, transparent 1px),
+      linear-gradient(90deg, rgb(148 180 222 / 0.06) 1px, transparent 1px);
+    background-size: 32px 32px;
+  }
+
+  .skeleton {
+    background: linear-gradient(90deg, #e6ecf3 25%, #f3f6fa 50%, #e6ecf3 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.4s linear infinite;
+    border-radius: 6px;
+  }
+
+  @keyframes shimmer {
+    to {
+      background-position: -200% 0;
+    }
+  }
+
+  @keyframes pulse-ring {
+    0% {
+      transform: scale(0.8);
+      opacity: 0.7;
+    }
+    100% {
+      transform: scale(2.4);
+      opacity: 0;
+    }
+  }
+
+  /* A status dot that breathes: live, overdue, or broken. */
+  .pulse-dot {
+    position: relative;
+    display: inline-block;
+    border-radius: 9999px;
+    background: currentColor;
+  }
+
+  .pulse-dot::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 9999px;
+    background: currentColor;
+    animation: pulse-ring 1.8s var(--ease-out) infinite;
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #c3cfdd transparent;
+  }
+
 }
 
+/* Unlayered on purpose: leaflet.css is unlayered, and a layered rule would lose to it. */
 .leaflet-container {
   background: #e8eef4;
   font: inherit;
+}
+
+/*
+ * Motion is decoration here, never information, so people who ask their
+ * system for less of it get none. The 3D scenes read the same media query
+ * and draw one still frame.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

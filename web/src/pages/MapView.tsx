@@ -6,6 +6,8 @@ import { COALFIELDS, TYPE_COLOUR } from "../lib/coalfields";
 
 import { api } from "../api/client";
 import type { GeoBreach } from "../api/types";
+import fieldBg from "../assets/photos/field-wide.jpg";
+import PageHero from "../lib/PageHero";
 import { Clause, Empty, Panel } from "../lib/ui";
 
 interface EvidenceRow {
@@ -142,7 +144,11 @@ export default function MapView() {
   ];
 
   return (
-    <div className="grid gap-4">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-4">
+      <PageHero image={fieldBg} eyebrow="Lease geometry" title="Did the work stay inside the boundary?">
+        Every capture's GPS point is tested against the sanctioned lease polygon in PostGIS. The national view shows
+        where Indian coal is; the lease view is the compliance check.
+      </PageHero>
       {/* Two scales of the same question. The national view answers "where is
           Indian coal?", the lease view answers "did work stay inside the
           boundary?" - and only the second one is a compliance check. */}

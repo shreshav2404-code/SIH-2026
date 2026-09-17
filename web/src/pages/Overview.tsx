@@ -1,4 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { motion } from "motion/react";
 import {
   CartesianGrid,
   Line,
@@ -13,6 +14,7 @@ import {
 import {
   AlertTriangle,
   CalendarClock,
+  Check,
   CircleAlert,
   ListChecks,
   ShieldCheck,
@@ -30,6 +32,8 @@ import excavatorBg from "../assets/photos/excavator-wide.jpg";
 import { EmptyAlerts, EmptyChart } from "../lib/brand";
 import { DirectiveLog, RaiseDirective } from "../lib/Directives";
 import Lifecycle from "../lib/lifecycle";
+import { item, stagger, useHeroReveal } from "../lib/motion";
+import { PitBackdrop } from "../lib/three";
 import { Badge, Clause, Empty, Panel, Stat } from "../lib/ui";
 
 function useAlerts() {
@@ -40,6 +44,38 @@ function useAlerts() {
         .data.items,
     refetchInterval: 4000,
   });
+}
+
+/**
+ * Acknowledging an alert. The API has always accepted it, and the "open
+ * critical alerts" count only counts unacknowledged ones - but nothing on
+ * the dashboard or the phone could acknowledge, so that number could only
+ * ever go up.
+ */
+function AckAlert({ alert }: { alert: Alert }) {
+  const qc = useQueryClient();
+  const ack = useMutation({
+    mutationFn: async () => (await api.post<Alert>(`/alerts/${alert.id}/acknowledge`)).data,
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["alerts"] }),
+  });
+
+  if (alert.acknowledged_by)
+    return (
+      <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700">
+        <Check size={12} /> acknowledged
+      </span>
+    );
+
+  return (
+    <button
+      type="button"
+      onClick={() => ack.mutate()}
+      disabled={ack.isPending}
+      className="rounded-md border border-[var(--line)] bg-white px-2 py-0.5 text-[11px] font-medium disabled:opacity-50"
+    >
+      {ack.isPending ? "Acknowledging…" : ack.isError ? "Retry acknowledge" : "Acknowledge"}
+    </button>
+  );
 }
 
 function MethaneChart() {
@@ -93,19 +129,19 @@ function MethaneChart() {
             />
             <ReferenceLine
               y={data.stats.threshold}
-              stroke="#b3261e"
+              stroke="#c42b2b"
               strokeDasharray="4 3"
               label={{
                 value: `trigger ${data.stats.threshold}%`,
                 fontSize: 10,
-                fill: "#b3261e",
+                fill: "#c42b2b",
                 position: "insideTopRight",
               }}
             />
             <Line
               type="monotone"
               dataKey="v"
-              stroke="#14539a"
+              stroke="#1b5bc4"
               strokeWidth={2}
               dot={false}
               isAnimationActive={false}
@@ -125,6 +161,7 @@ function MethaneChart() {
 }
 
 export default function Overview() {
+  const hero = useHeroReveal<HTMLElement>();
   const { data: alerts } = useAlerts();
 
   const { data: obligations } = useQuery({
@@ -149,79 +186,120 @@ export default function Overview() {
   ).length;
 
   return (
-    <div className="grid gap-4">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-4">
       {/* A bucket-wheel excavator on an open-cast bench - Pixabay
           (extraction-2781679) under the Pixabay licence: free for commercial
           use, no attribution required, no watermark. It says what this
           dashboard is about in the half-second before anyone reads a number,
           which is most of what a hero image is for. */}
+      {/* The pit behind the title is drawn live (lib/three/PitScene): one red
+          pin per overdue duty and one amber per duty due today, from the same
+          counts as the cards below. The photograph stays underneath at low
+          strength, so without WebGL the hero is still a finished picture. */}
       <section
-        className="relative overflow-hidden rounded-xl bg-cover bg-center shadow-sm"
-        style={{ backgroundImage: `url(${excavatorBg})` }}
+        ref={hero}
+        className="relative isolate min-h-[320px] overflow-hidden rounded-2xl bg-[var(--night-900)] shadow-[var(--shadow-lift)] ring-1 ring-black/5"
       >
-        <div className="absolute inset-0 bg-gradient-to-r from-[#0f2942]/92 via-[#0f2942]/70 to-[#0f2942]/25" />
-        <div className="relative flex flex-wrap items-end justify-between gap-4 px-5 py-6">
-          <div>
-            <p className="text-[11px] font-medium tracking-[0.18em] text-sky-200/80 uppercase">
+        <div
+          className="absolute inset-0 bg-cover bg-center opacity-25"
+          style={{ backgroundImage: `url(${excavatorBg})` }}
+        />
+        <PitBackdrop markers={{ overdue, due: dueToday }} />
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-[#081528] via-[#081528]/75 to-transparent" />
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-[#081528]/90 to-transparent" />
+
+        <div className="relative flex min-h-[320px] flex-col justify-between gap-6 p-6 sm:p-8">
+          <div className="max-w-xl">
+            <p
+              data-hero="eyebrow"
+              className="flex items-center gap-2 text-[11px] font-semibold tracking-[0.2em] text-sky-300/90 uppercase"
+            >
+              <span className="h-px w-6 bg-sky-300/70" />
               Gevra Open Cast · Korba, Chhattisgarh
             </p>
-            <h1 className="mt-1 text-2xl font-semibold tracking-tight text-white">
+            <h1
+              data-hero="title"
+              className="mt-2 text-[30px] leading-[1.1] font-semibold tracking-tight text-white sm:text-[38px]"
+            >
               Statutory compliance, continuously checked
             </h1>
-            <p className="mt-1 max-w-xl text-[13px] text-sky-100/80">
-              Duties tracked against the Mines Act and its regulations. Evidence
-              hash-chained on capture. Thresholds checked by arithmetic, never
-              by the model.
+            <p data-hero="body" className="mt-3 max-w-lg text-[14px] leading-relaxed text-sky-100/75">
+              Duties tracked against the OSH Code 2020, the OSH (Central) Rules
+              2026 and CMR 2017. Evidence hash-chained on capture. Thresholds
+              checked by arithmetic, never by the model.
             </p>
           </div>
-          <div className="rounded-lg bg-white/10 px-3 py-2 text-right backdrop-blur-sm">
-            <div className="text-[10px] tracking-wide text-sky-100/80 uppercase">
-              Evidence chain
+
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <div data-hero="body" className="flex flex-wrap gap-2 text-[11.5px] text-sky-100/80">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 backdrop-blur-sm">
+                <span className="pulse-dot size-1.5 text-red-400" /> {overdue} overdue
+              </span>
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 backdrop-blur-sm">
+                <span className="size-1.5 rounded-full bg-amber-400" /> {dueToday} due today
+              </span>
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 backdrop-blur-sm">
+                <span className="h-0.5 w-3 rounded-full bg-[var(--amber)]" /> haul road
+              </span>
             </div>
+
             <div
-              className={`text-lg font-semibold ${
-                chain?.ok === false ? "text-red-300" : "text-emerald-300"
-              }`}
+              data-hero="aside"
+              className="glass-dark min-w-[210px] rounded-2xl border border-white/10 px-4 py-3 shadow-2xl"
             >
-              {chain ? (chain.ok ? "Intact" : "BROKEN") : "—"}
+              <div className="flex items-center justify-between gap-4 text-[10.5px] font-semibold tracking-[0.14em] text-[var(--night-soft)] uppercase">
+                Evidence chain
+                <ShieldCheck size={14} className={chain?.ok === false ? "text-red-400" : "text-emerald-400"} />
+              </div>
+              <div
+                className={`mt-1 text-[26px] leading-none font-semibold tracking-tight ${
+                  chain?.ok === false ? "text-red-300" : "text-emerald-300"
+                }`}
+              >
+                {chain ? (chain.ok ? "Intact" : "BROKEN") : "—"}
+              </div>
+              <div className="mt-1.5 text-[11.5px] text-[var(--night-soft)]">
+                {chain ? `${chain.checked} records verified · ${critical} critical alert${critical === 1 ? "" : "s"}` : "checking…"}
+              </div>
             </div>
           </div>
         </div>
       </section>
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-        <Stat
-          label="Tracked duties"
-          value={obligations?.total ?? "—"}
-          icon={ListChecks}
-        />
-        <Stat
-          label="Overdue"
-          value={overdue}
-          tone={overdue ? "bad" : "good"}
-          hint="past the statutory deadline"
-          icon={AlertTriangle}
-        />
-        <Stat
-          label="Due today"
-          value={dueToday}
-          tone={dueToday ? "warn" : "default"}
-          icon={CalendarClock}
-        />
-        <Stat
-          label="Open critical alerts"
-          value={critical}
-          tone={critical ? "bad" : "good"}
-          icon={CircleAlert}
-        />
-        <Stat
-          label="Evidence chain"
-          value={chain ? (chain.ok ? "Intact" : "BROKEN") : "—"}
-          tone={chain ? (chain.ok ? "good" : "bad") : "default"}
-          hint={chain ? `${chain.checked} records verified` : undefined}
-          icon={ShieldCheck}
-        />
-      </div>
+      <motion.div
+        className="grid grid-cols-2 gap-3 lg:grid-cols-5"
+        variants={stagger}
+        initial="hidden"
+        animate="show"
+      >
+        <motion.div variants={item}>
+          <Stat label="Tracked duties" value={obligations?.total ?? "—"} icon={ListChecks} />
+        </motion.div>
+        <motion.div variants={item}>
+          <Stat
+            label="Overdue"
+            value={overdue}
+            tone={overdue ? "bad" : "good"}
+            hint="past the statutory deadline"
+            icon={AlertTriangle}
+          />
+        </motion.div>
+        <motion.div variants={item}>
+          <Stat label="Due today" value={dueToday} tone={dueToday ? "warn" : "default"} icon={CalendarClock} />
+        </motion.div>
+        <motion.div variants={item}>
+          <Stat label="Open critical alerts" value={critical} tone={critical ? "bad" : "good"} icon={CircleAlert} />
+        </motion.div>
+        <motion.div variants={item}>
+          <Stat
+            label="Evidence chain"
+            value={chain ? (chain.ok ? "Intact" : "BROKEN") : "—"}
+            tone={chain ? (chain.ok ? "good" : "bad") : "default"}
+            hint={chain ? `${chain.checked} records verified` : undefined}
+            icon={ShieldCheck}
+          />
+        </motion.div>
+      </motion.div>
 
       {chain && !chain.ok && chain.first_broken && (
         <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
@@ -239,7 +317,11 @@ export default function Overview() {
       )}
 
       <Panel title="Where compliance attaches to the mining cycle">
-        <Lifecycle />
+        {/* Seven stages side by side are wider than a small screen; scroll them
+            inside the panel rather than widening the whole page. */}
+        <div className="-mx-1 overflow-x-auto px-1 pb-1">
+          <Lifecycle />
+        </div>
       </Panel>
 
       <DirectiveLog />
@@ -282,10 +364,11 @@ export default function Overview() {
                         {new Date(a.created_at).toLocaleTimeString()}
                       </span>
                     </p>
-                    <div className="mt-1.5 flex items-center justify-between gap-2">
-                      <span className="text-[11px] text-[var(--ink-soft)]">
+                    <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2">
+                      <span className="mr-auto text-[11px] text-[var(--ink-soft)]">
                         {a.location ? `at ${a.location.replace(/_/g, " ")}` : ""}
                       </span>
+                      <AckAlert alert={a} />
                       <RaiseDirective alert={a} />
                     </div>
                   </div>

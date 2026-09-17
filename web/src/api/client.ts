@@ -54,18 +54,30 @@ api.interceptors.response.use(
 );
 
 /**
- * Open a server-rendered HTML report in a new tab.
+ * Open a server-rendered HTML report.
  *
  * A plain <a href> cannot be used: these endpoints require a bearer token and
  * the browser sends none on a top-level navigation, so the tab would show a
- * 401. Fetch it through this client, which does attach the token, and hand the
- * new tab a blob URL instead.
+ * 401. The viewer fetches it through this client, which attaches the token.
  */
+export const REPORT_EVENT = "anupalan:report";
+
 export async function openReport(path: string): Promise<void> {
-  const res = await api.get(path, { responseType: "blob" });
-  const url = URL.createObjectURL(res.data as Blob);
-  window.open(url, "_blank", "noopener");
-  // The new tab has already loaded the blob by the time this fires; revoking
-  // sooner would race it, and never revoking leaks the document.
-  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  // Shown in an in-page viewer (lib/ReportViewer), which listens for this
+  // event. A new tab opened after the authenticated fetch was silently
+  // dropped by popup blockers, which made every report button look dead.
+  window.dispatchEvent(new CustomEvent<string>(REPORT_EVENT, { detail: path }));
+}
+
+/**
+ * The API's own sentence, when it sent one. Axios' default message never is:
+ * "Request failed with status code 409" tells an officer nothing, while the
+ * API's "a signed return already exists for this period" tells them what to do.
+ */
+export function apiError(e: unknown): string {
+  const detail = (e as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail))
+    return detail.map((d) => (d as { msg?: string }).msg ?? JSON.stringify(d)).join("; ");
+  return e instanceof Error ? e.message : String(e);
 }
