@@ -68,6 +68,7 @@ does it, so the app refuses rather than pretending.
 ## Running it
 
 **Prerequisites:** Docker Desktop, Node 20+, Python 3.11, Android Studio.
+Ensure ports 8000, 5432, and 5173 are available before starting the services.
 See `../chodu sih/SETUP.md` for the machine setup.
 
 ```bash
