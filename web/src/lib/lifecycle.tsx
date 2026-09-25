@@ -23,7 +23,10 @@ const STAGES: {
   {
     name: "Survey & pit design",
     duty: "Working inside the lease boundary",
-    clause: "MMR 1961",
+    // MMDR 1957, not the Metalliferous Mines Regulations - MMR 1961 governs
+    // non-coal mines. The rulebook cites this duty to "MMDR 1957 - Lease
+    // boundary" (api/seed/clauses.json), and the two must agree on screen.
+    clause: "MMDR 1957",
     by: "deterministic",
   },
   {
