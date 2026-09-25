@@ -5,6 +5,7 @@ report drafting, ledger Q&A — happens on-device in the app. The backend
 never loads a model.
 This service is the ledger, the hash chain, the geometry and the risk score.
 """
+# Main API entry point.
 
 from contextlib import asynccontextmanager
 
